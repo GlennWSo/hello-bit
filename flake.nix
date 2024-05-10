@@ -41,6 +41,7 @@
       };
     in {
       devShells.default = craneLib.devShell {
+        name = "embeded-rs";
         inputsFrom = [crate];
         packages = with pkgs; [
           probe-rs
