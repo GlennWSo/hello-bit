@@ -28,7 +28,9 @@
         inherit localSystem crossSystem overlays;
       };
 
-      rust = pkgs.rust-bin.stable.latest.default;
+      rust = pkgs.rust-bin.stable.latest.default.override {
+        targets = ["thumbv7em-none-eabihf"];
+      };
       craneLib = (crane.mkLib pkgs).overrideToolchain rust;
       src = craneLib.cleanCargoSource (craneLib.path ./.);
       cargoArtifacts = craneLib.buildDepsOnly {
