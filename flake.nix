@@ -40,7 +40,13 @@
     in {
       devShells.default = craneLib.devShell {
         inputsFrom = [crate];
-        packages = [pkgs.rust-analyzer];
+        packages = with pkgs; [
+          probe-rs
+          rust-analyzer
+          cargo-binutils
+          minicom
+          usbutils
+        ];
       };
       packages = {
         default = crate;
