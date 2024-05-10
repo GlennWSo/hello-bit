@@ -2,3 +2,9 @@
 rustflags = [
   "-C", "link-arg=-Tlink.x",
 ]
+
+[build]
+target = "thumbv7em-none-eabihf"
+
+[embed]
+target = "thumbv7em-none-eabihf"
