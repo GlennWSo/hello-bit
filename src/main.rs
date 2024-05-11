@@ -5,33 +5,31 @@ use core::ptr::write_volatile;
 use cortex_m::asm::{delay, nop};
 use cortex_m_rt::entry;
 use embedded_hal::digital::StatefulOutputPin;
+use embedded_hal::{delay::DelayNs, digital::OutputPin};
 use panic_rtt_target as _;
 use rtt_target::{rprintln, rtt_init_print};
 
-use hal::pac;
-use nrf52833_hal as hal;
-
-// const PIN_CNF21= c
-
-fn wait() {
-    for _ in 0..400_000 {
-        nop();
-    }
-}
+use microbit::{board::Board, hal::timer::Timer};
 
 #[entry]
 fn main() -> ! {
     rtt_init_print!();
+    let mut board = match Board::take() {
+        Some(board) => board,
+        None => {
+            rprintln!("board/peripherals already taken");
+            panic!();
+        }
+    };
+    let mut t0 = Timer::new(board.TIMER0);
 
-    let p = pac::Peripherals::take().expect("Failed to take ownership of peripherals");
-    let port0 = hal::gpio::p0::Parts::new(p.P0);
-    let mut row1 = port0.p0_21.into_push_pull_output(hal::gpio::Level::Low);
-    let mut _col1 = port0.p0_28.into_push_pull_output(hal::gpio::Level::Low);
+    board.display_pins.col1.set_low();
+    let mut row1 = board.display_pins.row1;
 
-    rprintln!("init hal done, entering loop");
+    rprintln!("init board done, entering loop");
     loop {
         row1.toggle();
         rprintln!("led: {}", row1.is_set_high().unwrap());
-        wait();
+        t0.delay_ms(500);
     }
 }
