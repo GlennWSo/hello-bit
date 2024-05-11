@@ -19,7 +19,7 @@ async fn main(_spawner: Spawner) {
     defmt::println!("Hello, World!");
     loop {
         led.set_high();
-        defmt::println!("led: {}", led.is_set_high());
+        defmt::info!("led: {}", led.is_set_high());
         Timer::after_millis(300).await;
         led.set_low();
         Timer::after_millis(300).await;
