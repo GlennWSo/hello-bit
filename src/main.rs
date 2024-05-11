@@ -4,9 +4,12 @@
 use core::ptr::write_volatile;
 use cortex_m::asm::{delay, nop};
 use cortex_m_rt::entry;
-use nrf52833_pac::Peripherals;
+use embedded_hal::digital::StatefulOutputPin;
 use panic_rtt_target as _;
 use rtt_target::{rprintln, rtt_init_print};
+
+use hal::pac;
+use nrf52833_hal as hal;
 
 // const PIN_CNF21= c
 
@@ -20,16 +23,15 @@ fn wait() {
 fn main() -> ! {
     rtt_init_print!();
 
-    let p = Peripherals::take().expect("Failed to take ownership of peripherals");
-    p.P0.pin_cnf[21].write(|w| w.dir().output());
-    p.P0.pin_cnf[28].write(|w| w.dir().output());
+    let p = pac::Peripherals::take().expect("Failed to take ownership of peripherals");
+    let port0 = hal::gpio::p0::Parts::new(p.P0);
+    let mut row1 = port0.p0_21.into_push_pull_output(hal::gpio::Level::Low);
+    let mut _col1 = port0.p0_28.into_push_pull_output(hal::gpio::Level::Low);
 
-    let mut is_on = false;
-
-    rprintln!("init done, entering loop");
+    rprintln!("init hal done, entering loop");
     loop {
-        p.P0.out.write(|w| w.pin21().bit(is_on));
+        row1.toggle();
+        rprintln!("led: {}", row1.is_set_high().unwrap());
         wait();
-        is_on = !is_on;
     }
 }

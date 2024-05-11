@@ -9,3 +9,5 @@ cortex-m-rt = "0.7.0"
 rtt-target = { version =  "0.3.1", features = ["cortex-m"] }
 panic-rtt-target = { version =  "0.1.2", features = ["cortex-m"] }
 nrf52833-pac = "0.12.2"
+nrf52833-hal = "0.17.1"
+embedded-hal = "1.0.0"
