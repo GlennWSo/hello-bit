@@ -8,6 +8,8 @@ use core::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
+use micromath::F32Ext;
+
 use defmt::println;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive, Pin};
@@ -37,13 +39,13 @@ async fn blinker(mut display: LedMatrix, frame: &'static SharedFrame) {
     }
 }
 
-#[embassy_executor::task(pool_size = 5)]
+#[embassy_executor::task(pool_size = 25)]
 async fn blink(frame: &'static SharedFrame, r: usize, c: usize, ms: u64) {
     let mut is_on = false;
     loop {
         {
             let mut frame = frame.lock().await;
-            println!("blink1");
+            println!("LED {}:{} is {}", r, c, is_on);
             if let Some(frame) = frame.as_mut() {
                 if is_on {
                     frame.set(r, c);
@@ -67,9 +69,15 @@ async fn main(spawner: Spawner) {
     *frame = Some(Frame::default());
 
     spawner.spawn(blinker(display, &FRAME)).unwrap();
-    spawner.spawn(blink(&FRAME, 0, 0, 400)).unwrap();
-    spawner.spawn(blink(&FRAME, 1, 1, 567)).unwrap();
-    spawner.spawn(blink(&FRAME, 2, 2, 895)).unwrap();
-    spawner.spawn(blink(&FRAME, 3, 3, 333)).unwrap();
-    spawner.spawn(blink(&FRAME, 4, 4, 1337)).unwrap();
+    let gold: f32 = 1.618033988749;
+    for r in 0..5_u32 {
+        for c in 0..5_u32 {
+            let r: f32 = ((r.pow(2) + c.pow(2)) as f32).sqrt();
+
+            let delay = 100. * gold.powf(r);
+            spawner
+                .spawn(blink(&FRAME, r as usize, c as usize, delay as u64))
+                .unwrap();
+        }
+    }
 }

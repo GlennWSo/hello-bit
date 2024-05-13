@@ -525,6 +525,7 @@ dependencies = [
  "embassy-sync",
  "embassy-time",
  "microbit-bsp",
+ "micromath",
  "panic-halt",
  "panic-probe",
 ]
@@ -567,6 +568,12 @@ dependencies = [
  "futures",
  "lsm303agr",
 ]
+
+[[package]]
+name = "micromath"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3c8dda44ff03a2f238717214da50f65d5a53b45cd213a7370424ffdb6fae815"
 
 [[package]]
 name = "nb"

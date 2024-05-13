@@ -16,6 +16,7 @@ cortex-m-rt = "0.7.0"
 panic-halt = "0.2.0"
 embassy-sync = { version = "0.5.0", features = ["defmt"] }
 microbit-bsp = "0.3.0"
+micromath = "2.1.0"
 
 
 [profile.release]
