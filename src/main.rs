@@ -1,25 +1,14 @@
 #![no_std]
 #![no_main]
 
-use core::{
-    borrow::Borrow,
-    cell::RefCell,
-    ops::Deref,
-    sync::atomic::{AtomicUsize, Ordering},
-};
-
 use micromath::F32Ext;
 
 use defmt::println;
 use embassy_executor::Spawner;
-use embassy_nrf::gpio::{AnyPin, Level, Output, OutputDrive, Pin};
 use embassy_time::{Duration, Timer};
 use {defmt_rtt as _, panic_probe as _};
 
-use embassy_sync::{
-    blocking_mutex::raw::{NoopRawMutex, ThreadModeRawMutex},
-    mutex::Mutex,
-};
+use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, mutex::Mutex};
 
 use microbit_bsp::{
     display::{Brightness, Frame},
@@ -32,7 +21,7 @@ static FRAME: SharedFrame = SharedFrame::new(None);
 #[embassy_executor::task]
 async fn blinker(mut display: LedMatrix, frame: &'static SharedFrame) {
     loop {
-        let frame = frame.lock().await.clone();
+        let frame = *frame.lock().await;
         display
             .display(frame.unwrap(), Duration::from_millis(1))
             .await;
@@ -69,7 +58,7 @@ async fn main(spawner: Spawner) {
     *frame = Some(Frame::default());
 
     spawner.spawn(blinker(display, &FRAME)).unwrap();
-    let gold: f32 = 1.618033988749;
+    let gold: f32 = 1.618_034;
     for r in 0..5_u32 {
         for c in 0..5_u32 {
             let r: f32 = ((r.pow(2) + c.pow(2)) as f32).sqrt();
