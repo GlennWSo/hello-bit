@@ -3,7 +3,7 @@
 
 use micromath::F32Ext;
 
-use defmt::println;
+use defmt::{info, println};
 use embassy_executor::Spawner;
 use embassy_time::{Duration, Timer};
 use {defmt_rtt as _, panic_probe as _};
@@ -34,7 +34,7 @@ async fn blink(frame: &'static SharedFrame, r: usize, c: usize, ms: u64) {
     loop {
         {
             let mut frame = frame.lock().await;
-            println!("LED {}:{} is {}", r, c, is_on);
+            info!("LED {}:{} is {}", r, c, is_on);
             if let Some(frame) = frame.as_mut() {
                 if is_on {
                     frame.set(r, c);
