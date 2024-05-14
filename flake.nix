@@ -88,12 +88,13 @@
         type = "app";
         program = "${embed}/bin/embed";
       };
-      packages = {
-        default = crate;
-        consid = crate;
+      dbg = {
         deps = cargoArtifacts;
         src = dummySrc;
         dummySrc = dummySrc;
+      };
+      packages = {
+        default = crate;
         docs = craneLib.cargoDoc {
           inherit cargoArtifacts;
           src = dummySrc;
