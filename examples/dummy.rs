@@ -1,3 +1,4 @@
+//! This bin is used by crane to build cargo deps for caching
 #![no_std]
 #![no_main]
 

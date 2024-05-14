@@ -34,7 +34,7 @@
       dummySrc = filter {
         root = ./.;
         include = [
-          "examples/hello.rs"
+          "examples/dummy.rs"
           "Cargo.toml"
           "Cargo.lock"
           "memory.x"
@@ -59,7 +59,7 @@
         doCheck = false;
         cargoExtraArgs = "--target thumbv7em-none-eabihf";
         cargoCheckExtraArgs = "--target thumbv7em-none-eabihf";
-        cargoBuildCommand = "cargo build --profile release --example hello";
+        cargoBuildCommand = "cargo build --profile release --example dummy";
       };
       crate = craneLib.buildPackage {
         inherit src cargoArtifacts;
@@ -81,7 +81,6 @@
           cargo-binutils
           minicom
           usbutils
-          embed
         ];
       };
       apps.default = {
