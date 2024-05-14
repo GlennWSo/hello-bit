@@ -24,31 +24,16 @@
   }:
     flake-utils.lib.eachDefaultSystem (localSystem: let
       overlays = [(import rust-overlay)];
-      crossSystem = "aarch64-linux";
       pkgs = import nixpkgs {inherit overlays localSystem;};
-      crossPkgs = import nixpkgs {
-        inherit localSystem crossSystem overlays;
-      };
-
       rust = pkgs.rust-bin.stable.latest.default.override {
         targets = ["thumbv7em-none-eabihf"];
       };
       craneLib = (crane.mkLib pkgs).overrideToolchain rust;
-      # markdownFilter = path: _type: builtins.match ".*memory.x$" path != null;
-      # markdownOrCargo = path: type:
-      #   (markdownFilter path type) || (craneLib.filterCargoSources path type);
-
-      # src = pkgs.lib.cleanSourceWith {
-      #   src = craneLib.path ./.; # The original, unfiltered source
-      #   filter = markdownOrCargo;
-      # };
       filter = nix-filter.lib;
-      # RUST_FLAGS = "-C link-arg=-Tlink.x -C link-arg=-Tdefmt.x";
+
       dummySrc = filter {
         root = ./.;
         include = [
-          # "src"
-          # "src/"
           "examples/hello.rs"
           "Cargo.toml"
           "Cargo.lock"
@@ -56,16 +41,18 @@
           ".cargo"
         ];
       };
-      # dummySrc = craneLib.mkDummySrc {
-      #   src = ./.;
-      #   dummyrs = ./examples/hello.rs;
-      #   extraDummyScript = "
-      #     ls ${src}
-      #     cp ${src}/memory.x $out/
-      #   ";
-      # };
 
-      src = ./.;
+      src = filter {
+        root = ./.;
+        include = [
+          "src"
+          "examples"
+          "Cargo.toml"
+          "Cargo.lock"
+          "memory.x"
+          ".cargo"
+        ];
+      };
       cargoArtifacts = craneLib.buildDepsOnly {
         inherit dummySrc src;
         cargoToml = ./Cargo.toml;
@@ -76,13 +63,14 @@
       };
       crate = craneLib.buildPackage {
         inherit src cargoArtifacts;
-        # cargoTestCommand = "";
-        # cargoArtifacts = null;
         doCheck = false;
         cargoExtraArgs = "--target thumbv7em-none-eabihf";
         cargoCheckExtraArgs = "--target thumbv7em-none-eabihf";
         cargoBuildCommand = "cargo build --profile release";
       };
+      embed = pkgs.writeShellScriptBin "embed" ''
+        ${pkgs.probe-rs}/bin/probe-rs run ${crate}/bin/hello-bit --chip nRF52833_xxAA
+      '';
     in {
       devShells.default = craneLib.devShell {
         name = "embeded-rs";
@@ -93,7 +81,12 @@
           cargo-binutils
           minicom
           usbutils
+          embed
         ];
+      };
+      apps.default = {
+        type = "app";
+        program = "${embed}/bin/embed";
       };
       packages = {
         default = crate;
@@ -105,16 +98,6 @@
           inherit cargoArtifacts;
           src = dummySrc;
         };
-        cross.aarch64-linux.consid = let
-          rust = crossPkgs.rust-bin.stable.latest.default.override {
-            targets = [
-              "aarch64-unknown-linux-gnu"
-            ];
-          };
-          craneLib = (crane.mkLib pkgs).overrideToolchain rust;
-        in
-          pkgs.callPackage ./default.nix
-          {inherit craneLib;};
       };
     });
 }
