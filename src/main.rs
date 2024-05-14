@@ -65,7 +65,8 @@ async fn main(spawner: Spawner) {
             let r_dist = (2 - r);
             let radi: f32 = ((r_dist.pow(2) + c_dist.pow(2)) as f32).sqrt();
 
-            let delay = 100. * gold.powf(radi);
+            let rc_part = (c as f32) * 10. * gold + (r as f32) * 20. * gold;
+            let delay = 100. * gold.powf(radi) + rc_part;
             spawner
                 .spawn(blink(&FRAME, r as usize, c as usize, delay as u64))
                 .unwrap();
