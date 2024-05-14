@@ -59,11 +59,13 @@ async fn main(spawner: Spawner) {
 
     spawner.spawn(blinker(display, &FRAME)).unwrap();
     let gold: f32 = 1.618_034;
-    for r in 0..5_u32 {
-        for c in 0..5_u32 {
-            let r: f32 = ((r.pow(2) + c.pow(2)) as f32).sqrt();
+    for r in 0..5_i32 {
+        for c in 0..5_i32 {
+            let c_dist = (2 - c);
+            let r_dist = (2 - r);
+            let radi: f32 = ((r_dist.pow(2) + c_dist.pow(2)) as f32).sqrt();
 
-            let delay = 100. * gold.powf(r);
+            let delay = 100. * gold.powf(radi);
             spawner
                 .spawn(blink(&FRAME, r as usize, c as usize, delay as u64))
                 .unwrap();

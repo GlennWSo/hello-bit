@@ -4,7 +4,7 @@
 use core::ptr::write_volatile;
 use cortex_m::asm::{delay, nop};
 use cortex_m_rt::entry;
-use embedded_hal::digital::StatefulOutputPin;
+use embedded_hal::digital::v2::StatefulOutputPin;
 use panic_rtt_target as _;
 use rtt_target::{rprintln, rtt_init_print};
 
