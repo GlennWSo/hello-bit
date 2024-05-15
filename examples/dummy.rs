@@ -16,7 +16,7 @@ fn wait() {
 
 #[entry]
 fn main() -> ! {
-    println!("hi");
+    println!("dummy");
     let p = Peripherals::take().expect("Failed to take ownership of peripherals");
     p.P0.pin_cnf[21].write(|w| w.dir().output());
     p.P0.pin_cnf[28].write(|w| w.dir().output());
