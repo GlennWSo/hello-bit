@@ -2,9 +2,18 @@
 #![no_main]
 #![macro_use]
 
+//! suggested reading: https://docs.silabs.com/bluetooth/4.0/general/adv-and-scanning/bluetooth-adv-data-basics
+
+use core::borrow::{Borrow, BorrowMut};
+use core::future::IntoFuture;
+use core::ops::Deref;
+
+use defmt::{debug, error};
 use embassy_executor::Spawner;
+use embassy_time::Timer;
 use heapless::Vec;
 use microbit_bsp::*;
+use nrf_softdevice::ble::gatt_server::notify_value;
 use nrf_softdevice::ble::{gatt_server, peripheral, Connection};
 use nrf_softdevice::{raw, Softdevice};
 use static_cell::StaticCell;
@@ -29,6 +38,7 @@ fn config() -> Config {
     config
 }
 
+static SERVER: StaticCell<Server> = StaticCell::new();
 #[embassy_executor::main]
 async fn main(s: Spawner) {
     let _ = Microbit::new(config());
@@ -37,14 +47,35 @@ async fn main(s: Spawner) {
     let sd = enable_softdevice("Embassy Microbit");
 
     // Create a BLE GATT server and make it static
-    static SERVER: StaticCell<Server> = StaticCell::new();
+    // let server =
     let server = SERVER.init(Server::new(sd).unwrap());
 
+    // server.bas.battery_level_set(&13).unwrap();
     s.spawn(softdevice_task(sd)).unwrap();
-
     // Starts the bluetooth advertisement and GATT server
     s.spawn(advertiser_task(s, sd, server, "Embassy Microbit"))
         .unwrap();
+    s.spawn(drain_battery(server));
+}
+
+#[embassy_executor::task]
+async fn drain_battery(server: &'static Server) {
+    let mut lvl: u8 = 100;
+    loop {
+        {
+            let res = server.bas.battery_level_set(&lvl);
+            if let Err(e) = res {
+                error!("battery set error: {}", e);
+                continue;
+            };
+        }
+        Timer::after_millis(500).await;
+        if lvl > 0 {
+            lvl -= 1;
+        } else {
+            lvl = 100;
+        }
+    }
 }
 
 // Up to 2 connections
@@ -53,7 +84,7 @@ pub async fn gatt_server_task(conn: Connection, server: &'static Server) {
     gatt_server::run(&conn, server, |e| match e {
         ServerEvent::Bas(e) => match e {
             BatteryServiceEvent::BatteryLevelCccdWrite { notifications } => {
-                defmt::info!("battery notifications: {}", notifications)
+                defmt::info!("battery notifications: {}", notifications);
             }
         },
     })
