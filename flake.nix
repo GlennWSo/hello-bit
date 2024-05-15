@@ -68,13 +68,21 @@
         cargoCheckExtraArgs = "--target thumbv7em-none-eabihf";
         cargoBuildCommand = "cargo build --profile release";
       };
+      udev_hint = ''
+        "hint: make sure the microbit is connected and have mod 666 to enable flashing
+        this can be achived with sudo chmod or udev settings:
+          SUBSYSTEM=="usb", ATTR{idVendor}=="0d28", ATTR{idProduct}=="0204", MODE:="666""
+      '';
       embed = pkgs.writeShellScriptBin "embed" ''
-        ${pkgs.probe-rs}/bin/probe-rs run ${crate}/bin/hello-bit --chip nRF52833_xxAA
+        ${pkgs.probe-rs}/bin/probe-rs run ${crate}/bin/hello-bit --chip nRF52833_xxAA || echo ${udev_hint}
       '';
     in {
       devShells.default = craneLib.devShell {
         name = "embeded-rs";
         inputsFrom = [crate];
+        DIRENV_LOG_FORMAT = "";
+        shellHook = "
+        ";
         packages = with pkgs; [
           probe-rs
           rust-analyzer
