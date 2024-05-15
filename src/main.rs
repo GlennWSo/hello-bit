@@ -4,16 +4,12 @@
 
 //! suggested reading: https://docs.silabs.com/bluetooth/4.0/general/adv-and-scanning/bluetooth-adv-data-basics
 
-use core::borrow::{Borrow, BorrowMut};
-use core::future::IntoFuture;
-use core::ops::Deref;
 
-use defmt::{debug, error};
+use defmt::{error};
 use embassy_executor::Spawner;
 use embassy_time::Timer;
 use heapless::Vec;
 use microbit_bsp::*;
-use nrf_softdevice::ble::gatt_server::notify_value;
 use nrf_softdevice::ble::{gatt_server, peripheral, Connection};
 use nrf_softdevice::{raw, Softdevice};
 use static_cell::StaticCell;
@@ -55,7 +51,7 @@ async fn main(s: Spawner) {
     // Starts the bluetooth advertisement and GATT server
     s.spawn(advertiser_task(s, sd, server, "Embassy Microbit"))
         .unwrap();
-    s.spawn(drain_battery(server));
+    s.spawn(drain_battery(server)).unwrap();
 }
 
 #[embassy_executor::task]
