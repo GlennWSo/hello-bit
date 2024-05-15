@@ -74,8 +74,8 @@ async fn main(spawner: Spawner) {
     let gold: f32 = 1.618_034;
     for r in 0..5_i32 {
         for c in 0..5_i32 {
-            let c_dist = (2 - c);
-            let r_dist = (2 - r);
+            let c_dist = 2 - c;
+            let r_dist = 2 - r;
             let radi: f32 = ((r_dist.pow(2) + c_dist.pow(2)) as f32).sqrt();
             let rc_part = (c as f32) * 10. * gold + (r as f32) * 20. * gold;
             let delay = 100. * gold.powf(radi) + rc_part;

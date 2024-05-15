@@ -2,7 +2,7 @@
 #![no_std]
 #![no_main]
 
-use cortex_m::asm::{delay, nop};
+use cortex_m::asm::{nop};
 use cortex_m_rt::entry;
 use defmt::println;
 use nrf52833_pac::Peripherals;

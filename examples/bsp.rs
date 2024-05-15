@@ -1,8 +1,6 @@
 #![no_std]
 #![no_main]
 
-use core::ptr::write_volatile;
-use cortex_m::asm::{delay, nop};
 use cortex_m_rt::entry;
 use defmt::*;
 use embedded_hal::digital::StatefulOutputPin;

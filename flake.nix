@@ -57,16 +57,12 @@
         inherit dummySrc src;
         cargoToml = ./Cargo.toml;
         doCheck = false;
-        cargoExtraArgs = "--target thumbv7em-none-eabihf";
-        cargoCheckExtraArgs = "--target thumbv7em-none-eabihf";
-        cargoBuildCommand = "cargo build --profile release --example dummy";
+        cargoExtraArgs = "--target thumbv7em-none-eabihf --example dummy";
       };
-      crate = craneLib.buildPackage {
+      microBitFW = craneLib.buildPackage {
         inherit src cargoArtifacts;
         doCheck = false;
         cargoExtraArgs = "--target thumbv7em-none-eabihf";
-        cargoCheckExtraArgs = "--target thumbv7em-none-eabihf";
-        cargoBuildCommand = "cargo build --profile release";
       };
       udev_hint = ''
         "hint: make sure the microbit is connected and have mod 666 to enable flashing
@@ -74,12 +70,12 @@
           SUBSYSTEM=="usb", ATTR{idVendor}=="0d28", ATTR{idProduct}=="0204", MODE:="666""
       '';
       embed = pkgs.writeShellScriptBin "embed" ''
-        ${pkgs.probe-rs}/bin/probe-rs run ${crate}/bin/hello-bit --chip nRF52833_xxAA || echo ${udev_hint}
+        ${pkgs.probe-rs}/bin/probe-rs run ${microBitFW}/bin/hello-bit --chip nRF52833_xxAA || echo ${udev_hint}
       '';
     in {
       devShells.default = craneLib.devShell {
         name = "embeded-rs";
-        inputsFrom = [crate];
+        inputsFrom = [microBitFW];
         DIRENV_LOG_FORMAT = "";
         shellHook = "
         ";
@@ -101,7 +97,7 @@
         dummySrc = dummySrc;
       };
       packages = {
-        default = crate;
+        default = microBitFW;
         docs = craneLib.cargoDoc {
           inherit cargoArtifacts;
           src = dummySrc;
