@@ -1,87 +1,157 @@
 #![no_std]
 #![no_main]
+#![macro_use]
 
-use defmt::{info, println};
 use embassy_executor::Spawner;
-use embassy_futures::select::{select, Either};
-use embassy_nrf::gpio::{AnyPin, Input};
-use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, mutex::Mutex};
-use embassy_time::{Duration, Timer};
-use microbit_bsp::{
-    display::{Brightness, Frame},
-    LedMatrix, Microbit,
-};
-use micromath::F32Ext;
+use heapless::Vec;
+use microbit_bsp::*;
+use nrf_softdevice::ble::{gatt_server, peripheral, Connection};
+use nrf_softdevice::{raw, Softdevice};
+use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
-type SharedFrame = Mutex<ThreadModeRawMutex, Option<Frame<5, 5>>>;
-static FRAME: SharedFrame = SharedFrame::new(None);
-
-#[embassy_executor::task]
-async fn blinker(mut display: LedMatrix, frame: &'static SharedFrame) {
-    loop {
-        let frame = *frame.lock().await;
-        display
-            .display(frame.unwrap(), Duration::from_millis(1))
-            .await;
-    }
+#[nrf_softdevice::gatt_server]
+pub struct Server {
+    bas: BatteryService,
 }
 
-#[embassy_executor::task(pool_size = 25)]
-async fn blink(frame: &'static SharedFrame, r: usize, c: usize, ms: u64) {
-    let mut is_on = false;
-    loop {
-        {
-            let mut frame = frame.lock().await;
-            info!("LED {}:{} is {}", r, c, is_on);
-            if let Some(frame) = frame.as_mut() {
-                if is_on {
-                    frame.set(r, c);
-                } else {
-                    frame.unset(r, c);
-                }
-            }
-        }
-        Timer::after_millis(ms).await;
-        is_on = !is_on;
-    }
+#[nrf_softdevice::gatt_service(uuid = "180f")]
+pub struct BatteryService {
+    #[characteristic(uuid = "2a19", read, notify)]
+    battery_level: u8,
 }
 
-type Btn = Input<'static, AnyPin>;
-#[embassy_executor::task]
-async fn btn_log(mut a: Btn, mut b: Btn) {
-    loop {
-        match select(a.wait_for_rising_edge(), b.wait_for_rising_edge()).await {
-            Either::First(_) => println!("a rising"),
-            Either::Second(_) => println!("b rising"),
-        }
-        Timer::after_millis(10).await;
-    }
+// Application must run at a lower priority than softdevice
+fn config() -> Config {
+    let mut config = Config::default();
+    config.gpiote_interrupt_priority = Priority::P2;
+    config.time_interrupt_priority = Priority::P2;
+    config
 }
 
 #[embassy_executor::main]
-async fn main(spawner: Spawner) {
-    defmt::println!("Hello, World!");
-    let board = Microbit::default();
+async fn main(s: Spawner) {
+    let _ = Microbit::new(config());
 
-    let mut display = board.display;
-    display.set_brightness(Brightness::MAX);
-    let mut frame = FRAME.lock().await;
-    *frame = Some(Frame::default());
-    spawner.spawn(blinker(display, &FRAME)).unwrap();
-    spawner.spawn(btn_log(board.btn_a, board.btn_b));
+    // Spawn the underlying softdevice task
+    let sd = enable_softdevice("Embassy Microbit");
 
-    let gold: f32 = 1.618_034;
-    for r in 0..5_i32 {
-        for c in 0..5_i32 {
-            let c_dist = 2 - c;
-            let r_dist = 2 - r;
-            let radi: f32 = ((r_dist.pow(2) + c_dist.pow(2)) as f32).sqrt();
-            let rc_part = (c as f32) * 10. * gold + (r as f32) * 20. * gold;
-            let delay = 100. * gold.powf(radi) + rc_part;
-            spawner
-                .spawn(blink(&FRAME, r as usize, c as usize, delay as u64))
-                .unwrap();
+    // Create a BLE GATT server and make it static
+    static SERVER: StaticCell<Server> = StaticCell::new();
+    let server = SERVER.init(Server::new(sd).unwrap());
+
+    s.spawn(softdevice_task(sd)).unwrap();
+
+    // Starts the bluetooth advertisement and GATT server
+    s.spawn(advertiser_task(s, sd, server, "Embassy Microbit"))
+        .unwrap();
+}
+
+// Up to 2 connections
+#[embassy_executor::task(pool_size = "2")]
+pub async fn gatt_server_task(conn: Connection, server: &'static Server) {
+    gatt_server::run(&conn, server, |e| match e {
+        ServerEvent::Bas(e) => match e {
+            BatteryServiceEvent::BatteryLevelCccdWrite { notifications } => {
+                defmt::info!("battery notifications: {}", notifications)
+            }
+        },
+    })
+    .await;
+    defmt::info!("connection closed");
+}
+
+#[embassy_executor::task]
+pub async fn advertiser_task(
+    spawner: Spawner,
+    sd: &'static Softdevice,
+    server: &'static Server,
+    name: &'static str,
+) {
+    // spec for assigned numbers: https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Assigned_Numbers/out/en/Assigned_Numbers.pdf?v=1715770644767
+    let mut adv_data: Vec<u8, 31> = Vec::new();
+    let flags: [u8; 3] = [
+        2, //the len -1
+        raw::BLE_GAP_AD_TYPE_FLAGS as u8,
+        raw::BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE as u8,
+    ];
+    adv_data.extend(flags.into_iter());
+    let service_list_16 = [
+        3, // the len - 1
+        raw::BLE_GAP_AD_TYPE_16BIT_SERVICE_UUID_COMPLETE as u8,
+        0x0F,  // part of 0x1809 which u16 UIID for battery service
+        0x018, // part of 0x1809 which u16 UIID for battery service
+    ];
+    adv_data.extend(service_list_16.into_iter());
+
+    adv_data
+        .extend_from_slice(&[
+            (1 + name.len() as u8),
+            raw::BLE_GAP_AD_TYPE_COMPLETE_LOCAL_NAME as u8,
+        ])
+        .unwrap();
+
+    adv_data.extend_from_slice(name.as_bytes()).ok().unwrap();
+
+    // TODO: refer to some docs here to explain magic values
+    #[rustfmt::skip]
+    let scan_data = &[
+        0x03, 0x03, 0x09, 0x18,
+    ];
+
+    loop {
+        let config = peripheral::Config::default();
+        let adv = peripheral::ConnectableAdvertisement::ScannableUndirected {
+            adv_data: &adv_data[..],
+            scan_data,
+        };
+        defmt::debug!("advertising");
+        let conn = peripheral::advertise_connectable(sd, adv, &config)
+            .await
+            .unwrap();
+
+        defmt::debug!("connection established");
+        if let Err(e) = spawner.spawn(gatt_server_task(conn, server)) {
+            defmt::warn!("Error spawning gatt task: {:?}", e);
         }
     }
+}
+
+fn enable_softdevice(name: &'static str) -> &'static mut Softdevice {
+    let config = nrf_softdevice::Config {
+        clock: Some(raw::nrf_clock_lf_cfg_t {
+            source: raw::NRF_CLOCK_LF_SRC_RC as u8,
+            rc_ctiv: 4,
+            rc_temp_ctiv: 2,
+            accuracy: 7,
+        }),
+        conn_gap: Some(raw::ble_gap_conn_cfg_t {
+            conn_count: 2,
+            event_length: 24,
+        }),
+        conn_gatt: Some(raw::ble_gatt_conn_cfg_t { att_mtu: 128 }),
+        gatts_attr_tab_size: Some(raw::ble_gatts_cfg_attr_tab_size_t {
+            attr_tab_size: 32768,
+        }),
+        gap_role_count: Some(raw::ble_gap_cfg_role_count_t {
+            adv_set_count: 1,
+            periph_role_count: 3,
+        }),
+        gap_device_name: Some(raw::ble_gap_cfg_device_name_t {
+            p_value: name.as_ptr() as *const u8 as _,
+            current_len: name.len() as u16,
+            max_len: name.len() as u16,
+            write_perm: unsafe { core::mem::zeroed() },
+            _bitfield_1: raw::ble_gap_cfg_device_name_t::new_bitfield_1(
+                raw::BLE_GATTS_VLOC_STACK as u8,
+            ),
+        }),
+        ..Default::default()
+    };
+    Softdevice::enable(&config)
+}
+
+#[embassy_executor::task]
+async fn softdevice_task(sd: &'static Softdevice) {
+    sd.run().await;
 }

@@ -4,27 +4,25 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-embassy-executor = { version = "0.5.0", features = ["defmt", "integrated-timers", "arch-cortex-m", "executor-thread"] }
-embassy-time = { version = "0.3.0", features = ["defmt", "defmt-timestamp-uptime"] }
-embassy-nrf = { version = "0.1.0", features = ["defmt", "nrf52833", "time-driver-rtc1", "gpiote"] }
+microbit-bsp = "0.3.0"
+embassy-futures = { version = "0.1", default-features = false }
+embassy-executor = { version = "0.5", default-features = false, features = ["integrated-timers", "defmt", "arch-cortex-m", "executor-thread", "task-arena-size-32768"] }
+embassy-time = { version = "0.3", default-features = false, features = ["defmt-timestamp-uptime"] }
+
+nrf-softdevice = { version = "0.1.0", features = ["ble-peripheral", "ble-gatt-server", "s113", "nrf52833", "critical-section-impl", "defmt"] }
+nrf-softdevice-s113 = { version = "0.1.0" }
+
+heapless = "0.7"
+cortex-m-rt = "0.7"
+static_cell = "1"
 
 defmt = "0.3"
 defmt-rtt = "0.4"
-panic-probe = { version = "0.3.1", features = ["print-defmt"] }
-cortex-m = { version = "0.7.6", features = ["critical-section-single-core"] }
-cortex-m-rt = "0.7.0"
-panic-halt = "0.2.0"
-embassy-sync = { version = "0.5.0", features = ["defmt"] }
-microbit-bsp = "0.3.0"
-micromath = "2.1.0"
-panic-rtt-target = "0.1.3"
-rtt-target = "0.5.0"
-nrf52833-pac = "0.12.2"
-embassy-futures = { version = "0.1.1", features = ["defmt"] }
-embedded-hal = "1.0.0"
-microbit-v2 = "0.14.0"
-nrf52833-hal = "0.17.1"
-
+panic-probe = { version = "0.3", features = ["print-defmt"] }
 
 [profile.release]
 debug = 2
+
+[patch.crates-io]
+nrf-softdevice = { git = "https://github.com/embassy-rs/nrf-softdevice.git", rev = "b193eaa1718aeadd3b5eca54f1784aeceba75385" }
+nrf-softdevice-s113 = { git = "https://github.com/embassy-rs/nrf-softdevice.git", rev = "b193eaa1718aeadd3b5eca54f1784aeceba75385" }
