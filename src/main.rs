@@ -4,11 +4,10 @@
 
 //! suggested reading: https://docs.silabs.com/bluetooth/4.0/general/adv-and-scanning/bluetooth-adv-data-basics
 
-
 use defmt::{error, info};
 use embassy_executor::Spawner;
 use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, mutex::Mutex};
-use embassy_time::{Timer};
+use embassy_time::Timer;
 use heapless::Vec;
 use microbit_bsp::*;
 // use nrf_softdevice::ble::gatt_server::{notify_value, Server};
