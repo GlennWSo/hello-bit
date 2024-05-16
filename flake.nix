@@ -77,6 +77,7 @@
         name = "embeded-rs";
         inputsFrom = [microBitFW];
         DIRENV_LOG_FORMAT = "";
+        DEFMT_LOG = "info";
         shellHook = "
         ";
         packages = with pkgs; [

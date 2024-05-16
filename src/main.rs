@@ -4,12 +4,18 @@
 
 //! suggested reading: https://docs.silabs.com/bluetooth/4.0/general/adv-and-scanning/bluetooth-adv-data-basics
 
+use core::borrow::{Borrow, BorrowMut};
+use core::future::IntoFuture;
+use core::ops::Deref;
 
-use defmt::{error};
+use defmt::{debug, error, info};
 use embassy_executor::Spawner;
-use embassy_time::Timer;
+use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, mutex::Mutex};
+use embassy_time::{Delay, Timer};
 use heapless::Vec;
 use microbit_bsp::*;
+use nrf_softdevice::ble::advertisement_builder::ServiceList;
+// use nrf_softdevice::ble::gatt_server::{notify_value, Server};
 use nrf_softdevice::ble::{gatt_server, peripheral, Connection};
 use nrf_softdevice::{raw, Softdevice};
 use static_cell::StaticCell;
@@ -54,38 +60,62 @@ async fn main(s: Spawner) {
     s.spawn(drain_battery(server)).unwrap();
 }
 
+static BATTERY_NOTICE: Mutex<ThreadModeRawMutex, bool> = Mutex::new(false);
+
 #[embassy_executor::task]
 async fn drain_battery(server: &'static Server) {
     let mut lvl: u8 = 100;
     loop {
-        {
+        for _ in 0..10 {
             let res = server.bas.battery_level_set(&lvl);
             if let Err(e) = res {
                 error!("battery set error: {}", e);
                 continue;
             };
+
+            Timer::after_millis(500).await;
+            if lvl > 0 {
+                lvl -= 1;
+            } else {
+                lvl = 100;
+            }
         }
-        Timer::after_millis(500).await;
-        if lvl > 0 {
-            lvl -= 1;
-        } else {
-            lvl = 100;
-        }
+        if let Some(conn) = CONN.lock().await.as_ref() {
+            match server.bas.battery_level_notify(conn, &lvl) {
+                Ok(_) => info!("notice sent"),
+                Err(err) => info!("failed to send notice: {}", err),
+            }
+        };
     }
 }
 
 // Up to 2 connections
-#[embassy_executor::task(pool_size = "2")]
-pub async fn gatt_server_task(conn: Connection, server: &'static Server) {
-    gatt_server::run(&conn, server, |e| match e {
-        ServerEvent::Bas(e) => match e {
-            BatteryServiceEvent::BatteryLevelCccdWrite { notifications } => {
-                defmt::info!("battery notifications: {}", notifications);
-            }
-        },
-    })
-    .await;
-    defmt::info!("connection closed");
+
+static CONN: Mutex<ThreadModeRawMutex, Option<Connection>> = Mutex::new(None);
+
+#[embassy_executor::task(pool_size = "1")]
+pub async fn gatt_server_task(server: &'static Server) {
+    // server.on_notify_tx_complete(, )
+    // server.bas.;
+
+    {
+        let conn = {
+            let lock = CONN.lock().await;
+            lock.as_ref().unwrap().clone()
+        };
+
+        gatt_server::run(&conn, server, |e| match e {
+            ServerEvent::Bas(e) => match e {
+                BatteryServiceEvent::BatteryLevelCccdWrite { notifications } => {
+                    info!("battery notifications: {}", notifications);
+                }
+            },
+        })
+        .await;
+        info!("connection closed");
+    }
+    let mut lock = CONN.lock().await;
+    lock.take();
 }
 
 #[embassy_executor::task]
@@ -138,7 +168,10 @@ pub async fn advertiser_task(
             .unwrap();
 
         defmt::debug!("connection established");
-        if let Err(e) = spawner.spawn(gatt_server_task(conn, server)) {
+        let mut lock = CONN.lock().await;
+        lock.replace(conn);
+
+        if let Err(e) = spawner.spawn(gatt_server_task(server)) {
             defmt::warn!("Error spawning gatt task: {:?}", e);
         }
     }
