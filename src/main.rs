@@ -4,17 +4,13 @@
 
 //! suggested reading: https://docs.silabs.com/bluetooth/4.0/general/adv-and-scanning/bluetooth-adv-data-basics
 
-use core::borrow::{Borrow, BorrowMut};
-use core::future::IntoFuture;
-use core::ops::Deref;
 
-use defmt::{debug, error, info};
+use defmt::{error, info};
 use embassy_executor::Spawner;
 use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, mutex::Mutex};
-use embassy_time::{Delay, Timer};
+use embassy_time::{Timer};
 use heapless::Vec;
 use microbit_bsp::*;
-use nrf_softdevice::ble::advertisement_builder::ServiceList;
 // use nrf_softdevice::ble::gatt_server::{notify_value, Server};
 use nrf_softdevice::ble::{gatt_server, peripheral, Connection};
 use nrf_softdevice::{raw, Softdevice};
@@ -60,8 +56,6 @@ async fn main(s: Spawner) {
     s.spawn(drain_battery(server)).unwrap();
 }
 
-static BATTERY_NOTICE: Mutex<ThreadModeRawMutex, bool> = Mutex::new(false);
-
 #[embassy_executor::task]
 async fn drain_battery(server: &'static Server) {
     let mut lvl: u8 = 100;
@@ -95,13 +89,10 @@ static CONN: Mutex<ThreadModeRawMutex, Option<Connection>> = Mutex::new(None);
 
 #[embassy_executor::task(pool_size = "1")]
 pub async fn gatt_server_task(server: &'static Server) {
-    // server.on_notify_tx_complete(, )
-    // server.bas.;
-
     {
         let conn = {
             let lock = CONN.lock().await;
-            lock.as_ref().unwrap().clone()
+            lock.as_ref().unwrap().clone() // clone is used here so we can drop the lock
         };
 
         gatt_server::run(&conn, server, |e| match e {
