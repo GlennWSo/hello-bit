@@ -1,3 +1,3 @@
 [workspace]
-members = ["micro-ble"]
+members = ["ble/*"]
 resolver = "2"
