@@ -34,7 +34,7 @@
       dummySrc = filter {
         root = ./.;
         include = [
-          "examples/dummy.rs"
+          "dummy/"
           "Cargo.toml"
           "Cargo.lock"
           "memory.x"
@@ -57,7 +57,7 @@
         inherit dummySrc src;
         cargoToml = ./Cargo.toml;
         doCheck = false;
-        cargoExtraArgs = "--target thumbv7em-none-eabihf --example dummy";
+        cargoExtraArgs = "--target thumbv7em-none-eabihf -p dummy";
       };
       microBitFW = craneLib.buildPackage {
         inherit src cargoArtifacts;

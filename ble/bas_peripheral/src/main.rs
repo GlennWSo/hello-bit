@@ -4,7 +4,7 @@
 
 //! suggested reading: https://docs.silabs.com/bluetooth/4.0/general/adv-and-scanning/bluetooth-adv-data-basics
 
-use defmt::{error, info};
+use defmt::{debug, error, info};
 use embassy_executor::Spawner;
 use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, mutex::Mutex};
 use embassy_time::Timer;
@@ -152,7 +152,7 @@ pub async fn advertiser_task(
             adv_data: &adv_data[..],
             scan_data,
         };
-        defmt::debug!("advertising");
+        debug!("advertising");
         let conn = peripheral::advertise_connectable(sd, adv, &config)
             .await
             .unwrap();

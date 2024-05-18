@@ -1,3 +1,3 @@
 [workspace]
-members = ["ble/*"]
+members = [ "async-blink","ble/*"]
 resolver = "2"
