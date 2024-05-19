@@ -51,6 +51,7 @@
         fileset = srcFiles;
       };
 
+      # TODO cargo hakari
       cargoArtifacts = craneLib.buildDepsOnly {
         inherit src;
         doCheck = false;
@@ -62,6 +63,7 @@
         doCheck = false;
         cargoExtraArgs = "--target thumbv7em-none-eabihf -p ${pname}";
       };
+      # TODO dry?
       bleBatt = craneLib.buildPackage rec {
         pname = "ble-batt";
         inherit src cargoArtifacts;
