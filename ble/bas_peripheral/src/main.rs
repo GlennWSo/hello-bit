@@ -126,8 +126,8 @@ pub async fn advertiser_task(
     let service_list_16 = [
         3, // the len - 1
         raw::BLE_GAP_AD_TYPE_16BIT_SERVICE_UUID_COMPLETE as u8,
-        0x0F,  // part of 0x1809 which u16 UIID for battery service
-        0x018, // part of 0x1809 which u16 UIID for battery service
+        0x018, // part of 0x180F which u16 UIID for battery service
+        0x0F,  // part of 0x180F which u16 UIID for battery service
     ];
     adv_data.extend(service_list_16.into_iter());
 
@@ -143,7 +143,7 @@ pub async fn advertiser_task(
     // TODO: refer to some docs here to explain magic values
     #[rustfmt::skip]
     let scan_data = &[
-        0x03, 0x03, 0x09, 0x18,
+        0x03, 0x03, 0x18, 0x0F
     ];
 
     loop {
