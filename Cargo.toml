@@ -1,3 +1,5 @@
 [workspace]
-members = [ "async-blink","ble/*"]
+members = [ "blinky", "ble/*"]
+# metadata.crane.name = "hello-bit"
+# metadata.crane.version = "0.1.0"
 resolver = "2"

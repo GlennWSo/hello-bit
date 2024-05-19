@@ -19,7 +19,6 @@
     nixpkgs,
     rust-overlay,
     crane,
-    nix-filter,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (localSystem: let
@@ -29,40 +28,39 @@
         targets = ["thumbv7em-none-eabihf"];
       };
       craneLib = (crane.mkLib pkgs).overrideToolchain rust;
-      filter = nix-filter.lib;
 
-      dummySrc = filter {
+      fs = pkgs.lib.fileset;
+      dummyFiles = fs.unions [
+        ./.cargo
+        (fs.fileFilter (file: file.hasExt "toml") ./.)
+        (fs.fileFilter (file: file.name == "dummy.rs") ./.)
+        (fs.fileFilter (file: file.name == "Cargo.lock") ./.)
+      ];
+      dummySrc = fs.toSource {
         root = ./.;
-        include = [
-          "dummy/"
-          "Cargo.toml"
-          "Cargo.lock"
-          "memory.x"
-          ".cargo"
-        ];
+        fileset = dummyFiles;
       };
 
-      src = filter {
+      srcFiles = fs.unions [
+        dummyFiles
+        (fs.fileFilter (file: file.hasExt "rs") ./.)
+        (fs.fileFilter (file: file.name == "memory.x") ./.)
+      ];
+      src = fs.toSource {
         root = ./.;
-        include = [
-          "src"
-          "examples"
-          "Cargo.toml"
-          "Cargo.lock"
-          "memory.x"
-          ".cargo"
-        ];
+        fileset = srcFiles;
       };
+
       cargoArtifacts = craneLib.buildDepsOnly {
-        inherit dummySrc src;
-        cargoToml = ./Cargo.toml;
-        doCheck = false;
-        cargoExtraArgs = "--target thumbv7em-none-eabihf -p dummy";
-      };
-      microBitFW = craneLib.buildPackage {
-        inherit src cargoArtifacts;
+        inherit src;
         doCheck = false;
         cargoExtraArgs = "--target thumbv7em-none-eabihf";
+      };
+      blinky = craneLib.buildPackage rec {
+        pname = "blinky";
+        inherit src cargoArtifacts;
+        doCheck = false;
+        cargoExtraArgs = "--target thumbv7em-none-eabihf -p ${pname}";
       };
       udev_hint = ''
         "hint: make sure the microbit is connected and have mod 666 to enable flashing
@@ -70,12 +68,12 @@
           SUBSYSTEM=="usb", ATTR{idVendor}=="0d28", ATTR{idProduct}=="0204", MODE:="666""
       '';
       embed = pkgs.writeShellScriptBin "embed" ''
-        ${pkgs.probe-rs}/bin/probe-rs run ${microBitFW}/bin/hello-bit --chip nRF52833_xxAA || echo ${udev_hint}
+        ${pkgs.probe-rs}/bin/probe-rs run ${blinky}/bin/${blinky.pname} --chip nRF52833_xxAA || echo ${udev_hint}
       '';
     in {
       devShells.default = craneLib.devShell {
         name = "embeded-rs";
-        inputsFrom = [microBitFW];
+        inputsFrom = [blinky];
         DIRENV_LOG_FORMAT = "";
         DEFMT_LOG = "info";
         shellHook = "
@@ -94,11 +92,11 @@
       };
       dbg = {
         deps = cargoArtifacts;
-        src = dummySrc;
-        dummySrc = dummySrc;
+        dummySrc = dummySrc.outPath;
       };
       packages = {
-        default = microBitFW;
+        inherit blinky;
+        default = blinky;
         docs = craneLib.cargoDoc {
           inherit cargoArtifacts;
           src = dummySrc;
