@@ -70,6 +70,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf4b9d6a944f767f8e5e0db018570623c85f3d925ac718db4e06d0187adb21c1"
 
 [[package]]
+name = "ble-batt"
+version = "0.1.0"
+dependencies = [
+ "cortex-m-rt",
+ "defmt",
+ "defmt-rtt",
+ "embassy-executor",
+ "embassy-futures",
+ "embassy-sync",
+ "embassy-time",
+ "heapless 0.7.17",
+ "microbit-bsp",
+ "nrf-softdevice",
+ "nrf-softdevice-s113",
+ "panic-probe",
+ "static_cell",
+]
+
+[[package]]
 name = "blinky"
 version = "0.1.0"
 dependencies = [
@@ -659,25 +678,6 @@ name = "memchr"
 version = "2.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c8640c5d730cb13ebd907d8d04b52f55ac9a2eec55b440c8892f40d56c76c1d"
-
-[[package]]
-name = "micro-ble"
-version = "0.1.0"
-dependencies = [
- "cortex-m-rt",
- "defmt",
- "defmt-rtt",
- "embassy-executor",
- "embassy-futures",
- "embassy-sync",
- "embassy-time",
- "heapless 0.7.17",
- "microbit-bsp",
- "nrf-softdevice",
- "nrf-softdevice-s113",
- "panic-probe",
- "static_cell",
-]
 
 [[package]]
 name = "microbit-bsp"

@@ -62,14 +62,24 @@
         doCheck = false;
         cargoExtraArgs = "--target thumbv7em-none-eabihf -p ${pname}";
       };
+      bleBatt = craneLib.buildPackage rec {
+        pname = "ble-batt";
+        inherit src cargoArtifacts;
+        doCheck = false;
+        cargoExtraArgs = "--target thumbv7em-none-eabihf -p ${pname}";
+      };
       udev_hint = ''
         "hint: make sure the microbit is connected and have mod 666 to enable flashing
         this can be achived with sudo chmod or udev settings:
           SUBSYSTEM=="usb", ATTR{idVendor}=="0d28", ATTR{idProduct}=="0204", MODE:="666""
       '';
-      embed = pkgs.writeShellScriptBin "embed" ''
-        ${pkgs.probe-rs}/bin/probe-rs run ${blinky}/bin/${blinky.pname} --chip nRF52833_xxAA || echo ${udev_hint}
-      '';
+      embedder = fw: (pkgs.writeShellScript "embed-" ''
+        ${pkgs.probe-rs}/bin/probe-rs run ${fw}/bin/${fw.pname} --chip nRF52833_xxAA || echo ${udev_hint}
+      '');
+      embedApp = fw: {
+        type = "app";
+        program = "${embedder fw}";
+      };
     in {
       devShells.default = craneLib.devShell {
         name = "embeded-rs";
@@ -86,16 +96,18 @@
           usbutils
         ];
       };
-      apps.default = {
-        type = "app";
-        program = "${embed}/bin/embed";
+      apps = {
+        default = embedApp blinky;
+        blinky = embedApp blinky;
+        bleBatt = embedApp bleBatt;
       };
+
       dbg = {
         deps = cargoArtifacts;
         dummySrc = dummySrc.outPath;
       };
       packages = {
-        inherit blinky;
+        inherit blinky bleBatt;
         default = blinky;
         docs = craneLib.cargoDoc {
           inherit cargoArtifacts;
