@@ -52,10 +52,8 @@
           rm $out/workspace-hack/src/bin -rf
           rm $out/workspace-hack/src/lib.rs
           cp ${./workspace-hack/src/lib.rs} $out/workspace-hack/src/lib.rs
-
         '';
       };
-      # TODO cargo hakari
       cargoArtifacts = craneLib.buildDepsOnly {
         inherit src dummySrc;
         pname = "deps";
@@ -63,7 +61,6 @@
         doCheck = false;
         cargoExtraArgs = "--target thumbv7em-none-eabihf";
       };
-      # TODO dry?
       mkCrate = toml: (
         let
           info = craneLib.crateNameFromCargoToml {
@@ -78,14 +75,7 @@
             cargoExtraArgs = "--target thumbv7em-none-eabihf -p ${pname}";
           }
       );
-      blinky = craneLib.buildPackage rec {
-        pname = "blinky";
-        inherit src cargoArtifacts;
-        doCheck = false;
-        version = "0.1.0";
-        cargoExtraArgs = "--target thumbv7em-none-eabihf -p ${pname}";
-      };
-
+      blinky = mkCrate ./blinky/Cargo.toml;
       bleBatt = mkCrate ./ble/bas_peripheral/Cargo.toml;
 
       udev_hint = ''
@@ -127,8 +117,7 @@
         dummySrc = dummySrc;
       };
       packages = {
-        inherit blinky bleBatt;
-        deps = cargoArtifacts;
+        inherit blinky bleBatt cargoArtifacts;
         default = blinky;
         docs = craneLib.cargoDoc {
           inherit cargoArtifacts;
