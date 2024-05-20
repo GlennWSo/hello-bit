@@ -6,6 +6,9 @@
 runner = 'probe-rs run --chip nRF52833_xxAA' # <- change for your chip
 
 
+[udeps]
+target = "thumbv7em-none-eabihf"
+
 [build]
 target = "thumbv7em-none-eabihf"
 
