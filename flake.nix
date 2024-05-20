@@ -119,10 +119,6 @@
       packages = {
         inherit blinky bleBatt cargoArtifacts;
         default = blinky;
-        docs = craneLib.cargoDoc {
-          inherit cargoArtifacts;
-          src = dummySrc;
-        };
       };
     });
 }
