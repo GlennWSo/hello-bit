@@ -30,19 +30,15 @@
       craneLib = (crane.mkLib pkgs).overrideToolchain rust;
 
       fs = pkgs.lib.fileset;
-      dummyFiles = fs.unions [
+      files = fs.unions [
         ./.cargo
+        ./workspace-hack
         (fs.fileFilter (file: file.hasExt "toml") ./.)
         (fs.fileFilter (file: file.name == "dummy.rs") ./.)
         (fs.fileFilter (file: file.name == "Cargo.lock") ./.)
       ];
-      dummySrc = fs.toSource {
-        root = ./.;
-        fileset = dummyFiles;
-      };
-
       srcFiles = fs.unions [
-        dummyFiles
+        files
         (fs.fileFilter (file: file.hasExt "rs") ./.)
         (fs.fileFilter (file: file.name == "memory.x") ./.)
       ];
@@ -50,26 +46,48 @@
         root = ./.;
         fileset = srcFiles;
       };
+      dummySrc = craneLib.mkDummySrc {
+        src = src;
+        extraDummyScript = ''
+          rm $out/workspace-hack/src/bin -rf
+          rm $out/workspace-hack/src/lib.rs
+          cp ${./workspace-hack/src/lib.rs} $out/workspace-hack/src/lib.rs
 
+        '';
+      };
       # TODO cargo hakari
       cargoArtifacts = craneLib.buildDepsOnly {
-        inherit src;
+        inherit src dummySrc;
+        pname = "deps";
+        version = "0.1.0";
         doCheck = false;
         cargoExtraArgs = "--target thumbv7em-none-eabihf";
       };
+      # TODO dry?
+      mkCrate = toml: (
+        let
+          info = craneLib.crateNameFromCargoToml {
+            cargoToml = toml;
+          };
+          pname = info.pname;
+          version = info.version;
+        in
+          craneLib.buildPackage {
+            inherit src cargoArtifacts pname version;
+            doCheck = false;
+            cargoExtraArgs = "--target thumbv7em-none-eabihf -p ${pname}";
+          }
+      );
       blinky = craneLib.buildPackage rec {
         pname = "blinky";
         inherit src cargoArtifacts;
         doCheck = false;
+        version = "0.1.0";
         cargoExtraArgs = "--target thumbv7em-none-eabihf -p ${pname}";
       };
-      # TODO dry?
-      bleBatt = craneLib.buildPackage rec {
-        pname = "ble-batt";
-        inherit src cargoArtifacts;
-        doCheck = false;
-        cargoExtraArgs = "--target thumbv7em-none-eabihf -p ${pname}";
-      };
+
+      bleBatt = mkCrate ./ble/bas_peripheral/Cargo.toml;
+
       udev_hint = ''
         "hint: make sure the microbit is connected and have mod 666 to enable flashing
         this can be achived with sudo chmod or udev settings:
@@ -96,6 +114,7 @@
           cargo-binutils
           minicom
           usbutils
+          cargo-hakari
         ];
       };
       apps = {
@@ -105,11 +124,11 @@
       };
 
       dbg = {
-        deps = cargoArtifacts;
-        dummySrc = dummySrc.outPath;
+        dummySrc = dummySrc;
       };
       packages = {
         inherit blinky bleBatt;
+        deps = cargoArtifacts;
         default = blinky;
         docs = craneLib.cargoDoc {
           inherit cargoArtifacts;

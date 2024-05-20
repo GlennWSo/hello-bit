@@ -16,3 +16,4 @@ embassy-time = "0.3.0"
 microbit-bsp = "0.3.0"
 micromath = "2.1.0"
 panic-probe = "0.3.2"
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
