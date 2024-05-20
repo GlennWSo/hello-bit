@@ -19,7 +19,6 @@
     nixpkgs,
     rust-overlay,
     crane,
-    nix-filter,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (localSystem: let
@@ -29,54 +28,74 @@
         targets = ["thumbv7em-none-eabihf"];
       };
       craneLib = (crane.mkLib pkgs).overrideToolchain rust;
-      filter = nix-filter.lib;
 
-      dummySrc = filter {
+      fs = pkgs.lib.fileset;
+      files = fs.unions [
+        ./.cargo
+        ./workspace-hack
+        (fs.fileFilter (file: file.hasExt "toml") ./.)
+        (fs.fileFilter (file: file.name == "dummy.rs") ./.)
+        (fs.fileFilter (file: file.name == "Cargo.lock") ./.)
+      ];
+      srcFiles = fs.unions [
+        files
+        (fs.fileFilter (file: file.hasExt "rs") ./.)
+        (fs.fileFilter (file: file.name == "memory.x") ./.)
+      ];
+      src = fs.toSource {
         root = ./.;
-        include = [
-          "examples/dummy.rs"
-          "Cargo.toml"
-          "Cargo.lock"
-          "memory.x"
-          ".cargo"
-        ];
+        fileset = srcFiles;
       };
-
-      src = filter {
-        root = ./.;
-        include = [
-          "src"
-          "examples"
-          "Cargo.toml"
-          "Cargo.lock"
-          "memory.x"
-          ".cargo"
-        ];
+      dummySrc = craneLib.mkDummySrc {
+        src = src;
+        extraDummyScript = ''
+          rm $out/workspace-hack/src/bin -rf
+          rm $out/workspace-hack/src/lib.rs
+          cp ${./workspace-hack/src/lib.rs} $out/workspace-hack/src/lib.rs
+        '';
       };
       cargoArtifacts = craneLib.buildDepsOnly {
-        inherit dummySrc src;
-        cargoToml = ./Cargo.toml;
-        doCheck = false;
-        cargoExtraArgs = "--target thumbv7em-none-eabihf --example dummy";
-      };
-      microBitFW = craneLib.buildPackage {
-        inherit src cargoArtifacts;
+        inherit src dummySrc;
+        pname = "deps";
+        version = "0.1.0";
         doCheck = false;
         cargoExtraArgs = "--target thumbv7em-none-eabihf";
       };
+      mkCrate = toml: (
+        let
+          info = craneLib.crateNameFromCargoToml {
+            cargoToml = toml;
+          };
+          pname = info.pname;
+          version = info.version;
+        in
+          craneLib.buildPackage {
+            inherit src cargoArtifacts pname version;
+            doCheck = false;
+            cargoExtraArgs = "--target thumbv7em-none-eabihf -p ${pname}";
+          }
+      );
+      blinky = mkCrate ./blinky/Cargo.toml;
+      bleBatt = mkCrate ./ble/bas_peripheral/Cargo.toml;
+
       udev_hint = ''
         "hint: make sure the microbit is connected and have mod 666 to enable flashing
         this can be achived with sudo chmod or udev settings:
           SUBSYSTEM=="usb", ATTR{idVendor}=="0d28", ATTR{idProduct}=="0204", MODE:="666""
       '';
-      embed = pkgs.writeShellScriptBin "embed" ''
-        ${pkgs.probe-rs}/bin/probe-rs run ${microBitFW}/bin/hello-bit --chip nRF52833_xxAA || echo ${udev_hint}
-      '';
+      embedder = fw: (pkgs.writeShellScript "embed-" ''
+        ${pkgs.probe-rs}/bin/probe-rs run ${fw}/bin/${fw.pname} --chip nRF52833_xxAA || echo ${udev_hint}
+      '');
+      embedApp = fw: {
+        type = "app";
+        program = "${embedder fw}";
+      };
     in {
       devShells.default = craneLib.devShell {
         name = "embeded-rs";
-        inputsFrom = [microBitFW];
+        inputsFrom = [blinky];
         DIRENV_LOG_FORMAT = "";
+        DEFMT_LOG = "info";
         shellHook = "
         ";
         packages = with pkgs; [
@@ -85,23 +104,21 @@
           cargo-binutils
           minicom
           usbutils
+          cargo-hakari
         ];
       };
-      apps.default = {
-        type = "app";
-        program = "${embed}/bin/embed";
+      apps = {
+        default = embedApp blinky;
+        blinky = embedApp blinky;
+        bleBatt = embedApp bleBatt;
       };
+
       dbg = {
-        deps = cargoArtifacts;
-        src = dummySrc;
         dummySrc = dummySrc;
       };
       packages = {
-        default = microBitFW;
-        docs = craneLib.cargoDoc {
-          inherit cargoArtifacts;
-          src = dummySrc;
-        };
+        inherit blinky bleBatt cargoArtifacts;
+        default = blinky;
       };
     });
 }
