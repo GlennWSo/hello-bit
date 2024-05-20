@@ -1076,6 +1076,7 @@ dependencies = [
  "embassy-time",
  "microbit-bsp",
  "panic-probe",
+ "workspace-hack",
 ]
 
 [[package]]

@@ -14,5 +14,5 @@ cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
 defmt = "0.3"
 defmt-rtt = "0.4"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 microbit-bsp = "0.3.0"
-# workspace-hack = { version = "0.1", path = "../workspace-hack" }
