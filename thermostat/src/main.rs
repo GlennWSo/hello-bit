@@ -11,14 +11,14 @@ use microbit_bsp::*;
 use {defmt_rtt as _, panic_probe as _};
 
 use defmt::Debug2Format as Dbg2;
-use thermostat::{ThermoPart, TriThermo, M3, V3};
+use thermostat::{pid::PID, ThermoPart, TriThermo, M3, V3};
 
 static ROOM_TEMP: Mutex<ThreadModeRawMutex, f32> = Mutex::new(0.);
 static HEAT_POWER: Mutex<ThreadModeRawMutex, f32> = Mutex::new(0.);
 
 #[embassy_executor::task]
-async fn heater() {
-    let dt: u64 = 100;
+async fn simple_heater() {
+    let dt: u64 = 500;
     let target_temp = 20.;
     let mut ticker = Ticker::every(Duration::from_millis(dt));
     loop {
@@ -26,6 +26,28 @@ async fn heater() {
             let temp = *ROOM_TEMP.lock().await;
             let mut power = HEAT_POWER.lock().await;
             *power = if temp > target_temp { 0. } else { 500. };
+        }
+        ticker.next().await;
+    }
+}
+
+#[embassy_executor::task]
+async fn pid_heater() {
+    let dt: u64 = 100;
+    let target_temp = 20.;
+    let p_k = 20.;
+    let i_k = 0.1;
+    let d_k = -1.;
+    let min_out = 0.;
+    let max_out = 500.;
+    let mut pid = PID::new(p_k, i_k, d_k, min_out, max_out, target_temp);
+    let mut ticker = Ticker::every(Duration::from_millis(dt));
+    loop {
+        {
+            let temp = *ROOM_TEMP.lock().await;
+            let mut power = HEAT_POWER.lock().await;
+            let secs = (dt as f32) / 1000.;
+            *power = pid.update(temp, secs * 10.);
         }
         ticker.next().await;
     }
@@ -41,7 +63,7 @@ async fn simulate_heat(mut model: TriThermo) {
             let heat = *HEAT_POWER.lock().await;
             let heat = [heat, 0., 0.];
             let secs = (dt as f32) / 1000.;
-            model.update(secs, heat);
+            model.update(secs * 10., heat);
             *room_temp = model.temp()[1];
         }
         ticker.next().await;
@@ -73,5 +95,5 @@ async fn main(spawner: Spawner) {
     let mut model = TriThermo::new(parts.into(), connections.into());
     println!("ThermoDyn system: {:#?}", Dbg2(&model));
     spawner.spawn(simulate_heat(model)).unwrap();
-    spawner.spawn(heater()).unwrap();
+    spawner.spawn(pid_heater()).unwrap();
 }

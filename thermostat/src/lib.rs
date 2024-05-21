@@ -1,4 +1,6 @@
 #![no_std]
+pub mod pid;
+
 use defmt::{dbg, info};
 use nalgebra as na;
 pub type M3 = na::Matrix3<f32>;
