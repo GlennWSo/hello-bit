@@ -7,7 +7,10 @@ use embassy_executor::Spawner;
 use embassy_futures::select::{select, Either};
 use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, mutex::Mutex};
 use embassy_time::{Duration, Ticker, Timer};
-use microbit_bsp::*;
+use microbit_bsp::{
+    embassy_nrf::gpio::{AnyPin, Input},
+    *,
+};
 use {defmt_rtt as _, panic_probe as _};
 
 use defmt::Debug2Format as Dbg2;
@@ -40,6 +43,18 @@ async fn simple_heater() {
             *power = if temp > target_temp { 0. } else { 500. };
         }
         ticker.next().await;
+    }
+}
+
+type Btn = Input<'static, AnyPin>;
+#[embassy_executor::task]
+async fn btn_log(mut a: Btn, mut b: Btn) {
+    loop {
+        match select(a.wait_for_rising_edge(), b.wait_for_rising_edge()).await {
+            Either::First(_) => println!("a rising"),
+            Either::Second(_) => println!("b rising"),
+        }
+        Timer::after_millis(10).await;
     }
 }
 
@@ -85,6 +100,7 @@ async fn simulate_heat(mut model: TriThermo) {
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let board = Microbit::default();
+    spawner.spawn(btn_log(board.btn_a, board.btn_b));
 
     let parts = [
         ThermoPart::new(30., Some(10.)),  // heater
