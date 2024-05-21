@@ -1,4 +1,5 @@
 #![no_std]
+use defmt::{dbg, info};
 use nalgebra as na;
 pub type M3 = na::Matrix3<f32>;
 pub type V3 = na::Vector3<f32>;
@@ -47,8 +48,8 @@ impl TriThermo {
     pub fn add_heat(&mut self, dt: f32, heat: [f32; 3]) {
         for (part, heat) in self.parts.iter_mut().zip(heat.into_iter()) {
             match part.capacity {
-                Some(cap) => part.temp += heat * dt / cap,
-                None => continue,
+                Some(cap) => part.temp += (heat * dt / cap),
+                None => (),
             }
         }
     }

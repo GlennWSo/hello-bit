@@ -95,7 +95,7 @@
         name = "embeded-rs";
         inputsFrom = [blinky];
         DIRENV_LOG_FORMAT = "";
-        DEFMT_LOG = "info";
+        DEFMT_LOG = "debug";
         shellHook = "
         ";
         packages = with pkgs; [
