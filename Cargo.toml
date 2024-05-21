@@ -1,5 +1,12 @@
 [workspace]
-members = [ "blinky", "ble/*", "workspace-hack", "raw", "simple"]
+members = [ 
+  "blinky", 
+  "ble/*", 
+  "raw", 
+  "simple",
+  "thermostat",
+  "workspace-hack", 
+]
 # metadata.crane.name = "hello-bit"
 metadata.crane.version = "0.1.0"
 resolver = "2"
