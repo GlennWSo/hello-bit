@@ -16,6 +16,18 @@ use thermostat::{pid::PID, ThermoPart, TriThermo, M3, V3};
 static ROOM_TEMP: Mutex<ThreadModeRawMutex, f32> = Mutex::new(0.);
 static HEAT_POWER: Mutex<ThreadModeRawMutex, f32> = Mutex::new(0.);
 
+const FFW: f32 = 10.0; // run simulation and ctrl faster
+
+#[embassy_executor::task]
+async fn log_globals() {
+    loop {
+        let temp = *ROOM_TEMP.lock().await;
+        let heat = *HEAT_POWER.lock().await;
+        info!("temp: {}, heat:{}", temp, heat);
+        Timer::after_millis(500).await;
+    }
+}
+
 #[embassy_executor::task]
 async fn simple_heater() {
     let dt: u64 = 500;
@@ -37,7 +49,7 @@ async fn pid_heater() {
     let target_temp = 20.;
     let p_k = 20.;
     let i_k = 0.1;
-    let d_k = -1.;
+    let d_k = -100.;
     let min_out = 0.;
     let max_out = 500.;
     let mut pid = PID::new(p_k, i_k, d_k, min_out, max_out, target_temp);
@@ -46,8 +58,8 @@ async fn pid_heater() {
         {
             let temp = *ROOM_TEMP.lock().await;
             let mut power = HEAT_POWER.lock().await;
-            let secs = (dt as f32) / 1000.;
-            *power = pid.update(temp, secs * 10.);
+            let secs = (dt as f32) / 1000. * FFW;
+            *power = pid.update(temp, secs);
         }
         ticker.next().await;
     }
@@ -62,12 +74,11 @@ async fn simulate_heat(mut model: TriThermo) {
             let mut room_temp = ROOM_TEMP.lock().await;
             let heat = *HEAT_POWER.lock().await;
             let heat = [heat, 0., 0.];
-            let secs = (dt as f32) / 1000.;
-            model.update(secs * 10., heat);
+            let secs = (dt as f32) / 1000. * FFW;
+            model.update(secs, heat);
             *room_temp = model.temp()[1];
         }
         ticker.next().await;
-        info!("temp: {:?}", Dbg2(&model.temp()));
     }
 }
 
@@ -96,4 +107,5 @@ async fn main(spawner: Spawner) {
     println!("ThermoDyn system: {:#?}", Dbg2(&model));
     spawner.spawn(simulate_heat(model)).unwrap();
     spawner.spawn(pid_heater()).unwrap();
+    spawner.spawn(log_globals()).unwrap();
 }
