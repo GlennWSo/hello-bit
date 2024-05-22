@@ -2,32 +2,46 @@
 #![no_main]
 
 use cortex_m_rt::entry;
-use defmt::{info, println};
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, Either};
 use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, mutex::Mutex};
 use embassy_time::{Duration, Ticker, Timer};
-use microbit_bsp::{
-    embassy_nrf::gpio::{AnyPin, Input},
-    *,
-};
-use {defmt_rtt as _, panic_probe as _};
+use microbit_bsp::display::Brightness;
+use microbit_bsp::embassy_nrf::gpio::{AnyPin, Input};
+use microbit_bsp::LedMatrix;
+use microbit_bsp::Microbit;
 
 use defmt::Debug2Format as Dbg2;
+use defmt::{debug, info, println};
+use heapless::String;
+use ufmt;
+use {defmt_rtt as _, panic_probe as _};
+
 use thermostat::{pid::PID, ThermoPart, TriThermo, M3, V3};
 
 static ROOM_TEMP: Mutex<ThreadModeRawMutex, f32> = Mutex::new(0.);
 static HEAT_POWER: Mutex<ThreadModeRawMutex, f32> = Mutex::new(0.);
+static TARGET_TEMP: Mutex<ThreadModeRawMutex, f32> = Mutex::new(20.);
 
 const FFW: f32 = 10.0; // run simulation and ctrl faster
 
 #[embassy_executor::task]
-async fn log_globals() {
+async fn log_globals(mut display: LedMatrix) {
+    display.set_brightness(Brightness::MAX);
     loop {
         let temp = *ROOM_TEMP.lock().await;
+        let target = *TARGET_TEMP.lock().await;
         let heat = *HEAT_POWER.lock().await;
-        info!("temp: {}, heat:{}", temp, heat);
-        Timer::after_millis(500).await;
+        info!("target:{}, temp: {}, heat:{}", target, temp, heat);
+        let mut msg: String<20> = String::new();
+        let decimal = (temp * 10.0) as i32 % 10;
+        ufmt::uwriteln!(
+            msg,
+            " {}.{}C"
+            temp as i32,
+            decimal
+        );
+        display.scroll(&msg).await;
     }
 }
 
@@ -48,33 +62,39 @@ async fn simple_heater() {
 
 type Btn = Input<'static, AnyPin>;
 #[embassy_executor::task]
-async fn btn_log(mut a: Btn, mut b: Btn) {
+async fn btn_retarget(mut a: Btn, mut b: Btn) {
     loop {
-        match select(a.wait_for_rising_edge(), b.wait_for_rising_edge()).await {
-            Either::First(_) => println!("a rising"),
-            Either::Second(_) => println!("b rising"),
-        }
+        let diff = match select(a.wait_for_rising_edge(), b.wait_for_rising_edge()).await {
+            Either::First(_) => {
+                debug!("a rising");
+                -2.0
+            }
+            Either::Second(_) => {
+                debug!("b rising");
+                3.0
+            }
+        };
+        let mut target = TARGET_TEMP.lock().await;
+        *target += diff;
         Timer::after_millis(10).await;
     }
 }
 
 #[embassy_executor::task]
-async fn pid_heater() {
+async fn pid_heater(p: f32, i: f32, d: f32) {
     let dt: u64 = 100;
-    let target_temp = 20.;
-    let p_k = 20.;
-    let i_k = 0.1;
-    let d_k = -100.;
+    let target_temp = *TARGET_TEMP.lock().await;
     let min_out = 0.;
     let max_out = 500.;
-    let mut pid = PID::new(p_k, i_k, d_k, min_out, max_out, target_temp);
+    let mut pid = PID::new(p, i, d, min_out, max_out, target_temp);
     let mut ticker = Ticker::every(Duration::from_millis(dt));
     loop {
         {
-            let temp = *ROOM_TEMP.lock().await;
-            let mut power = HEAT_POWER.lock().await;
             let secs = (dt as f32) / 1000. * FFW;
-            *power = pid.update(temp, secs);
+            let temp = *ROOM_TEMP.lock().await;
+            let target_temp = *TARGET_TEMP.lock().await;
+            let mut power = HEAT_POWER.lock().await;
+            *power = pid.update(target_temp, temp, secs);
         }
         ticker.next().await;
     }
@@ -100,7 +120,7 @@ async fn simulate_heat(mut model: TriThermo) {
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let board = Microbit::default();
-    spawner.spawn(btn_log(board.btn_a, board.btn_b));
+    spawner.spawn(btn_retarget(board.btn_a, board.btn_b));
 
     let parts = [
         ThermoPart::new(30., Some(10.)),  // heater
@@ -122,6 +142,6 @@ async fn main(spawner: Spawner) {
     let mut model = TriThermo::new(parts.into(), connections.into());
     println!("ThermoDyn system: {:#?}", Dbg2(&model));
     spawner.spawn(simulate_heat(model)).unwrap();
-    spawner.spawn(pid_heater()).unwrap();
-    spawner.spawn(log_globals()).unwrap();
+    spawner.spawn(pid_heater(20., 0.1, -200.)).unwrap();
+    spawner.spawn(log_globals(board.display)).unwrap();
 }

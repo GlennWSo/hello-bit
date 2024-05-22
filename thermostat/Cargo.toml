@@ -18,3 +18,5 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 microbit-bsp = "0.3.0"
 nalgebra = { version = "0.32.5", default-features = false, features = ["macros"] }
 embassy-sync = "0.5.0"
+heapless = { version = "0.8.0", features = ["ufmt"] }
+ufmt = "0.2.0"

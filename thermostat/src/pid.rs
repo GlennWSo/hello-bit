@@ -28,7 +28,8 @@ impl PID {
             old_feedback: 0.,
         }
     }
-    pub fn update(&mut self, feedback: f32, dt: f32) -> f32 {
+    pub fn update(&mut self, target: f32, feedback: f32, dt: f32) -> f32 {
+        self.target = target;
         let diff = self.target - feedback;
         let p = self.pk * diff;
 

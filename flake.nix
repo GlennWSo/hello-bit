@@ -75,8 +75,6 @@
             cargoExtraArgs = "--target thumbv7em-none-eabihf -p ${pname}";
           }
       );
-      blinky = mkCrate ./blinky/Cargo.toml;
-      bleBatt = mkCrate ./ble/bas_peripheral/Cargo.toml;
 
       udev_hint = ''
         "hint: make sure the microbit is connected and have mod 666 to enable flashing
@@ -90,6 +88,9 @@
         type = "app";
         program = "${embedder fw}";
       };
+      blinky = mkCrate ./blinky/Cargo.toml;
+      thermostat = mkCrate ./thermostat/Cargo.toml;
+      bleBatt = mkCrate ./ble/bas_peripheral/Cargo.toml;
     in {
       devShells.default = craneLib.devShell {
         name = "embeded-rs";
@@ -111,13 +112,14 @@
         default = embedApp blinky;
         blinky = embedApp blinky;
         bleBatt = embedApp bleBatt;
+        thermostat = embedApp thermostat;
       };
 
       dbg = {
         dummySrc = dummySrc;
       };
       packages = {
-        inherit blinky bleBatt cargoArtifacts;
+        inherit blinky bleBatt thermostat cargoArtifacts;
         default = blinky;
       };
     });
