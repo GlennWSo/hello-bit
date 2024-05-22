@@ -10,18 +10,18 @@ use static_cell::StaticCell;
 
 use defmt::{debug, info};
 
-static CONN: Mutex<ThreadModeRawMutex, Option<Connection>> = Mutex::new(None);
+pub static CONN: Mutex<ThreadModeRawMutex, Option<Connection>> = Mutex::new(None);
 
 #[nrf_softdevice::gatt_server]
 pub struct Server {
-    bas: BatteryService,
+    pub bas: BatteryService,
 }
 static SERVER: StaticCell<Server> = StaticCell::new();
 
 #[nrf_softdevice::gatt_service(uuid = "180f")]
 pub struct BatteryService {
     #[characteristic(uuid = "2a19", read, notify)]
-    battery_level: u8,
+    pub battery_level: u8,
 }
 
 // Application must run at a lower priority than softdevice
@@ -150,4 +150,20 @@ fn enable_softdevice(name: &'static str) -> &'static mut Softdevice {
 #[embassy_executor::task]
 async fn softdevice_task(sd: &'static Softdevice) {
     sd.run().await;
+}
+
+pub async fn init_ble(s: Spawner) -> &'static Server {
+    // Spawn the underlying softdevice task
+    let sd = enable_softdevice("Embassy Microbit");
+
+    // Create a BLE GATT server and make it static
+    // let server =
+    let server = SERVER.init(Server::new(sd).unwrap());
+
+    // server.bas.battery_level_set(&13).unwrap();
+    s.spawn(softdevice_task(sd)).unwrap();
+    // Starts the bluetooth advertisement and GATT server
+    s.spawn(advertiser_task(s, sd, server, "Embassy Microbit"))
+        .unwrap();
+    server
 }
