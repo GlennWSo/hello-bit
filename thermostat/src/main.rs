@@ -17,7 +17,7 @@ use heapless::String;
 use ufmt;
 use {defmt_rtt as _, panic_probe as _};
 
-use thermostat::{pid::PID, ThermoPart, TriThermo, M3, V3};
+use thermostat::{ble::*, pid::PID, ThermoPart, TriThermo, M3, V3};
 
 static ROOM_TEMP: Mutex<ThreadModeRawMutex, f32> = Mutex::new(0.);
 static HEAT_POWER: Mutex<ThreadModeRawMutex, f32> = Mutex::new(0.);
@@ -119,7 +119,7 @@ async fn simulate_heat(mut model: TriThermo) {
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    let board = Microbit::default();
+    let board = Microbit::new(config());
     spawner.spawn(btn_retarget(board.btn_a, board.btn_b));
 
     let parts = [

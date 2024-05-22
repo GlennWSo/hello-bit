@@ -1234,7 +1234,10 @@ dependencies = [
  "heapless 0.8.0",
  "microbit-bsp",
  "nalgebra",
+ "nrf-softdevice",
+ "nrf-softdevice-s113",
  "panic-probe",
+ "static_cell",
  "ufmt",
  "workspace-hack",
 ]

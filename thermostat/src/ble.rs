@@ -1,25 +1,22 @@
-#![no_std]
-#![no_main]
-#![macro_use]
-
-//! suggested reading: https://docs.silabs.com/bluetooth/4.0/general/adv-and-scanning/bluetooth-adv-data-basics
-
-use defmt::{debug, error, info};
-use embassy_executor::Spawner;
-use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, mutex::Mutex};
-use embassy_time::Timer;
-use heapless::Vec;
-use microbit_bsp::*;
-// use nrf_softdevice::ble::gatt_server::{notify_value, Server};
 use nrf_softdevice::ble::{gatt_server, peripheral, Connection};
 use nrf_softdevice::{raw, Softdevice};
+
+use embassy_executor::Spawner;
+use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, mutex::Mutex};
+use microbit_bsp::{Config, Priority};
+
+use heapless::Vec;
 use static_cell::StaticCell;
-use {defmt_rtt as _, panic_probe as _};
+
+use defmt::{debug, info};
+
+static CONN: Mutex<ThreadModeRawMutex, Option<Connection>> = Mutex::new(None);
 
 #[nrf_softdevice::gatt_server]
 pub struct Server {
     bas: BatteryService,
 }
+static SERVER: StaticCell<Server> = StaticCell::new();
 
 #[nrf_softdevice::gatt_service(uuid = "180f")]
 pub struct BatteryService {
@@ -28,61 +25,13 @@ pub struct BatteryService {
 }
 
 // Application must run at a lower priority than softdevice
-fn config() -> Config {
+pub fn config() -> Config {
     let mut config = Config::default();
     config.gpiote_interrupt_priority = Priority::P2;
     config.time_interrupt_priority = Priority::P2;
     config
 }
 
-static SERVER: StaticCell<Server> = StaticCell::new();
-#[embassy_executor::main]
-async fn main(s: Spawner) {
-    let _ = Microbit::new(config());
-
-    // Spawn the underlying softdevice task
-    let sd = enable_softdevice("Embassy Microbit");
-
-    // Create a BLE GATT server and make it static
-    // let server =
-    let server = SERVER.init(Server::new(sd).unwrap());
-
-    // server.bas.battery_level_set(&13).unwrap();
-    s.spawn(softdevice_task(sd)).unwrap();
-    // Starts the bluetooth advertisement and GATT server
-    s.spawn(advertiser_task(s, sd, server, "Embassy Microbit"))
-        .unwrap();
-    s.spawn(drain_battery(server)).unwrap();
-}
-
-#[embassy_executor::task]
-async fn drain_battery(server: &'static Server) {
-    let mut lvl: u8 = 100;
-    loop {
-        for _ in 0..10 {
-            let res = server.bas.battery_level_set(&lvl);
-            if let Err(e) = res {
-                error!("battery set error: {}", e);
-                continue;
-            };
-
-            Timer::after_millis(500).await;
-            if lvl > 0 {
-                lvl -= 1;
-            } else {
-                lvl = 100;
-            }
-        }
-        if let Some(conn) = CONN.lock().await.as_ref() {
-            match server.bas.battery_level_notify(conn, &lvl) {
-                Ok(_) => info!("notice sent"),
-                Err(err) => info!("failed to send notice: {}", err),
-            }
-        };
-    }
-}
-
-static CONN: Mutex<ThreadModeRawMutex, Option<Connection>> = Mutex::new(None);
 #[embassy_executor::task(pool_size = "1")]
 pub async fn gatt_server_task(server: &'static Server) {
     {
