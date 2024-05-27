@@ -49,7 +49,7 @@ pub async fn gatt_server_task(server: &'static Server) {
                     info!("battery notifications: {}", notifications);
                 }
                 ThermoServiceEvent::TargetTempratureWrite(v) => match TARGET_TEMP.try_lock() {
-                    Ok(mut target) => *target = v as f32,
+                    Ok(mut target) => *target = v as f32 / 100.,
                     Err(err) => error!("failed write to TARGET_TEMP: {}", err),
                 },
             },
