@@ -21,25 +21,30 @@ use thermostat::{ble::*, pid::PID, ThermoPart, TriThermo, M3, V3};
 
 static ROOM_TEMP: Mutex<ThreadModeRawMutex, f32> = Mutex::new(0.);
 static HEAT_POWER: Mutex<ThreadModeRawMutex, f32> = Mutex::new(0.);
-static TARGET_TEMP: Mutex<ThreadModeRawMutex, f32> = Mutex::new(20.);
 
 const FFW: f32 = 10.0; // run simulation and ctrl faster
 
 #[embassy_executor::task]
 async fn log_globals(mut display: LedMatrix, server: &'static Server) {
     display.set_brightness(Brightness::MAX);
-    let mut ble_temp: u8 = 20;
+    let mut ble_temp = 20;
     loop {
         let temp = *ROOM_TEMP.lock().await;
         let target = *TARGET_TEMP.lock().await;
         let heat = *HEAT_POWER.lock().await;
         info!("target:{}, temp: {}, heat:{}", target, temp, heat);
 
-        ble_temp = temp as u8;
+        ble_temp = (temp * 100.) as i32;
         let res = server.bas.battery_level_set(&ble_temp);
         if let Err(e) = res {
             error!("battery set error: {}", e);
             continue;
+        };
+        if let Some(conn) = CONN.lock().await.as_ref() {
+            match server.bas.battery_level_notify(conn, &ble_temp) {
+                Ok(_) => info!("notice sent"),
+                Err(err) => info!("failed to send notice: {}", err),
+            }
         };
 
         let mut msg: String<20> = String::new();

@@ -8,9 +8,10 @@ use microbit_bsp::{Config, Priority};
 use heapless::Vec;
 use static_cell::StaticCell;
 
-use defmt::{debug, info};
+use defmt::{debug, error, info};
 
 pub static CONN: Mutex<ThreadModeRawMutex, Option<Connection>> = Mutex::new(None);
+pub static TARGET_TEMP: Mutex<ThreadModeRawMutex, f32> = Mutex::new(20.);
 
 #[nrf_softdevice::gatt_server]
 pub struct Server {
@@ -20,8 +21,8 @@ static SERVER: StaticCell<Server> = StaticCell::new();
 
 #[nrf_softdevice::gatt_service(uuid = "180f")]
 pub struct BatteryService {
-    #[characteristic(uuid = "2a19", read, notify)]
-    pub battery_level: u8,
+    #[characteristic(uuid = "2a6e", read, notify, write)]
+    pub battery_level: i32,
 }
 
 // Application must run at a lower priority than softdevice
@@ -45,6 +46,10 @@ pub async fn gatt_server_task(server: &'static Server) {
                 BatteryServiceEvent::BatteryLevelCccdWrite { notifications } => {
                     info!("battery notifications: {}", notifications);
                 }
+                BatteryServiceEvent::BatteryLevelWrite(v) => match TARGET_TEMP.try_lock() {
+                    Ok(mut lock) => *lock = v as f32,
+                    Err(err) => info!("failed to lock TARGET_TEMP: {}", err),
+                },
             },
         })
         .await;
