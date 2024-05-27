@@ -15,14 +15,16 @@ pub static TARGET_TEMP: Mutex<ThreadModeRawMutex, f32> = Mutex::new(20.);
 
 #[nrf_softdevice::gatt_server]
 pub struct Server {
-    pub bas: BatteryService,
+    pub thermo: ThermoService,
 }
 static SERVER: StaticCell<Server> = StaticCell::new();
 
 #[nrf_softdevice::gatt_service(uuid = "180f")]
-pub struct BatteryService {
-    #[characteristic(uuid = "2a6e", read, notify, write)]
-    pub battery_level: i32,
+pub struct ThermoService {
+    #[characteristic(uuid = "2a6e", read, notify)]
+    pub current_temprature: i32,
+    #[characteristic(uuid = "2a6e", read, write)]
+    pub target_temprature: i32,
 }
 
 // Application must run at a lower priority than softdevice
@@ -42,13 +44,13 @@ pub async fn gatt_server_task(server: &'static Server) {
         };
 
         gatt_server::run(&conn, server, |e| match e {
-            ServerEvent::Bas(e) => match e {
-                BatteryServiceEvent::BatteryLevelCccdWrite { notifications } => {
+            ServerEvent::Thermo(e) => match e {
+                ThermoServiceEvent::CurrentTempratureCccdWrite { notifications } => {
                     info!("battery notifications: {}", notifications);
                 }
-                BatteryServiceEvent::BatteryLevelWrite(v) => match TARGET_TEMP.try_lock() {
-                    Ok(mut lock) => *lock = v as f32,
-                    Err(err) => info!("failed to lock TARGET_TEMP: {}", err),
+                ThermoServiceEvent::TargetTempratureWrite(v) => match TARGET_TEMP.try_lock() {
+                    Ok(mut target) => *target = v as f32,
+                    Err(err) => error!("failed write to TARGET_TEMP: {}", err),
                 },
             },
         })

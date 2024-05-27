@@ -35,13 +35,14 @@ async fn log_globals(mut display: LedMatrix, server: &'static Server) {
         info!("target:{}, temp: {}, heat:{}", target, temp, heat);
 
         ble_temp = (temp * 100.) as i32;
-        let res = server.bas.battery_level_set(&ble_temp);
+        let res = server.thermo.current_temprature_set(&ble_temp);
         if let Err(e) = res {
-            error!("battery set error: {}", e);
+            error!("failed to set value: {}", e);
             continue;
         };
+
         if let Some(conn) = CONN.lock().await.as_ref() {
-            match server.bas.battery_level_notify(conn, &ble_temp) {
+            match server.thermo.current_temprature_notify(conn, &ble_temp) {
                 Ok(_) => info!("notice sent"),
                 Err(err) => info!("failed to send notice: {}", err),
             }
