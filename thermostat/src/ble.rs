@@ -35,7 +35,9 @@ pub fn config() -> Config {
     config
 }
 
-#[embassy_executor::task(pool_size = "1")]
+const MAX_CONN: u8 = 2;
+
+#[embassy_executor::task(pool_size = MAX_CONN as usize)]
 pub async fn gatt_server_task(server: &'static Server) {
     {
         let conn = {
@@ -122,16 +124,19 @@ pub async fn advertiser_task(
     }
 }
 
-fn enable_softdevice(name: &'static str) -> &'static mut Softdevice {
+fn enable_softdevice(gap_name: &'static str) -> &'static mut Softdevice {
     let config = nrf_softdevice::Config {
+        /// low frequency clock config
         clock: Some(raw::nrf_clock_lf_cfg_t {
+            /// [nrf docs](https://infocenter.nordicsemi.com/topic/ps_nrf52833/clock.html?cp=5_1_0_4_3_2_20#register.LFCLKSRC)
+            /// the clock source type to use
             source: raw::NRF_CLOCK_LF_SRC_RC as u8,
-            rc_ctiv: 4,
+            rc_ctiv: 4, // calibiration timer in seconds/4
             rc_temp_ctiv: 2,
-            accuracy: 7,
+            accuracy: raw::NRF_CLOCK_LF_ACCURACY_20_PPM as u8,
         }),
         conn_gap: Some(raw::ble_gap_conn_cfg_t {
-            conn_count: 2,
+            conn_count: MAX_CONN,
             event_length: 24,
         }),
         conn_gatt: Some(raw::ble_gatt_conn_cfg_t { att_mtu: 128 }),
@@ -140,12 +145,13 @@ fn enable_softdevice(name: &'static str) -> &'static mut Softdevice {
         }),
         gap_role_count: Some(raw::ble_gap_cfg_role_count_t {
             adv_set_count: 1,
-            periph_role_count: 3,
+            periph_role_count: MAX_CONN,
+            // periph_role_count: 3,
         }),
         gap_device_name: Some(raw::ble_gap_cfg_device_name_t {
-            p_value: name.as_ptr() as *const u8 as _,
-            current_len: name.len() as u16,
-            max_len: name.len() as u16,
+            p_value: gap_name.as_ptr() as *const u8 as _,
+            current_len: gap_name.len() as u16,
+            max_len: gap_name.len() as u16,
             write_perm: unsafe { core::mem::zeroed() },
             _bitfield_1: raw::ble_gap_cfg_device_name_t::new_bitfield_1(
                 raw::BLE_GATTS_VLOC_STACK as u8,
@@ -163,7 +169,8 @@ async fn softdevice_task(sd: &'static Softdevice) {
 
 pub async fn init_ble(s: Spawner) -> &'static Server {
     // Spawn the underlying softdevice task
-    let sd = enable_softdevice("Embassy Microbit");
+    let device_name = "Embassy Microbit";
+    let sd = enable_softdevice(device_name);
 
     // Create a BLE GATT server and make it static
     // let server =
@@ -172,7 +179,7 @@ pub async fn init_ble(s: Spawner) -> &'static Server {
     // server.bas.battery_level_set(&13).unwrap();
     s.spawn(softdevice_task(sd)).unwrap();
     // Starts the bluetooth advertisement and GATT server
-    s.spawn(advertiser_task(s, sd, server, "Embassy Microbit"))
+    s.spawn(advertiser_task(s, sd, server, device_name))
         .unwrap();
     server
 }
