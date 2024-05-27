@@ -76,13 +76,13 @@ pub async fn advertiser_task(
         raw::BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE as u8,
     ];
     adv_data.extend(flags.into_iter());
-    let service_list_16 = [
-        3, // the len - 1
+    #[rustfmt::skip]
+    let advertized_services = [
+        3, // len - 1
         raw::BLE_GAP_AD_TYPE_16BIT_SERVICE_UUID_COMPLETE as u8,
-        0x018, // part of 0x180F which u16 UIID for battery service
-        0x0F,  // part of 0x180F which u16 UIID for battery service
+        0x09, 0x018, // u16 UIID for health-thermometer service
     ];
-    adv_data.extend(service_list_16.into_iter());
+    adv_data.extend(advertized_services.into_iter());
 
     adv_data
         .extend_from_slice(&[
@@ -93,10 +93,12 @@ pub async fn advertiser_task(
 
     adv_data.extend_from_slice(name.as_bytes()).ok().unwrap();
 
-    // TODO: refer to some docs here to explain magic values
+    // additional services shown when scanned
     #[rustfmt::skip]
     let scan_data = &[
-        0x03, 0x03, 0x18, 0x0F
+        // 0x03, // len -1 
+        // raw::BLE_GAP_AD_TYPE_16BIT_SERVICE_UUID_COMPLETE as u8,
+        // 0x09, 0x018, // u16 UIID for health-thermometer service
     ];
 
     loop {
