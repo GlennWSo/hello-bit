@@ -11,7 +11,7 @@ use microbit_bsp::embassy_nrf::gpio::{AnyPin, Input};
 use microbit_bsp::LedMatrix;
 use microbit_bsp::Microbit;
 
-use defmt::Debug2Format as Dbg2;
+use defmt::{dbg, Debug2Format as Dbg2};
 use defmt::{debug, error, info, println};
 use heapless::String;
 use ufmt;
@@ -19,35 +19,16 @@ use {defmt_rtt as _, panic_probe as _};
 
 use thermostat::{ble::*, pid::PID, ThermoPart, TriThermo, M3, V3};
 
-static ROOM_TEMP: Mutex<ThreadModeRawMutex, f32> = Mutex::new(0.);
 static HEAT_POWER: Mutex<ThreadModeRawMutex, f32> = Mutex::new(0.);
 
 const FFW: f32 = 10.0; // run simulation and ctrl faster
 
 #[embassy_executor::task]
-async fn log_globals(mut display: LedMatrix, server: &'static Server) {
+async fn display_temp(mut display: LedMatrix, server: &'static Server) {
     display.set_brightness(Brightness::MAX);
-    let mut ble_temp = 20;
     loop {
         let temp = *ROOM_TEMP.lock().await;
-        let target = *TARGET_TEMP.lock().await;
-        let heat = *HEAT_POWER.lock().await;
-        info!("target:{}, temp: {}, heat:{}", target, temp, heat);
-
-        ble_temp = (temp * 100.) as i32;
-        let res = server.thermo.current_temprature_set(&ble_temp);
-        if let Err(e) = res {
-            error!("failed to set value: {}", e);
-            continue;
-        };
-
-        if let Some(conn) = CONN.lock().await.as_ref() {
-            match server.thermo.current_temprature_notify(conn, &ble_temp) {
-                Ok(_) => info!("notice sent"),
-                Err(err) => info!("failed to send notice: {}", err),
-            }
-        };
-
+        let ble_temp = (temp * 100.) as i32;
         let mut msg: String<20> = String::new();
         let decimal = (temp * 10.0) as i32 % 10;
         ufmt::uwriteln!(
@@ -57,6 +38,19 @@ async fn log_globals(mut display: LedMatrix, server: &'static Server) {
             decimal
         );
         display.scroll(&msg).await;
+    }
+}
+
+#[embassy_executor::task]
+async fn log_globals(server: &'static Server) {
+    let dt = 500;
+    let mut ticker = Ticker::every(Duration::from_millis(dt));
+    loop {
+        let temp = *ROOM_TEMP.lock().await;
+        let target = *TARGET_TEMP.lock().await;
+        let heat = *HEAT_POWER.lock().await;
+        debug!("target:{}, temp: {}, heat:{}", target, temp, heat);
+        ticker.next().await;
     }
 }
 
@@ -135,7 +129,7 @@ async fn simulate_heat(mut model: TriThermo) {
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let board = Microbit::new(config());
-    let server = init_ble(spawner).await;
+    let server = run_ble(spawner).await;
 
     spawner.spawn(btn_retarget(board.btn_a, board.btn_b));
 
@@ -160,5 +154,6 @@ async fn main(spawner: Spawner) {
     println!("ThermoDyn system: {:#?}", Dbg2(&model));
     spawner.spawn(simulate_heat(model)).unwrap();
     spawner.spawn(pid_heater(20., 0.1, -200.)).unwrap();
-    spawner.spawn(log_globals(board.display, server)).unwrap();
+    spawner.spawn(log_globals(server)).unwrap();
+    spawner.spawn(display_temp(board.display, server)).unwrap();
 }

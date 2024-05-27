@@ -1,3 +1,6 @@
+//! [assigned numbers][https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Assigned_Numbers/out/en/Assigned_Numbers.pdf?v=1715770644767]
+
+use embassy_time::{Duration, Ticker};
 use nrf_softdevice::ble::{gatt_server, peripheral, Connection};
 use nrf_softdevice::{raw, Softdevice};
 
@@ -12,6 +15,8 @@ use defmt::{debug, error, info};
 
 pub static CONN: Mutex<ThreadModeRawMutex, Option<Connection>> = Mutex::new(None);
 pub static TARGET_TEMP: Mutex<ThreadModeRawMutex, f32> = Mutex::new(20.);
+pub static ROOM_TEMP: Mutex<ThreadModeRawMutex, f32> = Mutex::new(0.);
+static NOTICE: Mutex<ThreadModeRawMutex, bool> = Mutex::new(false);
 
 #[nrf_softdevice::gatt_server]
 pub struct Server {
@@ -49,6 +54,10 @@ pub async fn gatt_server_task(server: &'static Server) {
             ServerEvent::Thermo(e) => match e {
                 ThermoServiceEvent::CurrentTempratureCccdWrite { notifications } => {
                     info!("battery notifications: {}", notifications);
+                    match NOTICE.try_lock() {
+                        Ok(mut lock) => *lock = notifications,
+                        Err(err) => error!("failed to write to NOTICE: {}", err),
+                    };
                 }
                 ThermoServiceEvent::TargetTempratureWrite(v) => match TARGET_TEMP.try_lock() {
                     Ok(mut target) => *target = v as f32 / 100.,
@@ -70,7 +79,6 @@ pub async fn advertiser_task(
     server: &'static Server,
     name: &'static str,
 ) {
-    // spec for assigned numbers: https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Assigned_Numbers/out/en/Assigned_Numbers.pdf?v=1715770644767
     let mut adv_data: Vec<u8, 31> = Vec::new();
     let flags: [u8; 3] = [
         2, //the len -1
@@ -167,7 +175,29 @@ async fn softdevice_task(sd: &'static Softdevice) {
     sd.run().await;
 }
 
-pub async fn init_ble(s: Spawner) -> &'static Server {
+#[embassy_executor::task]
+async fn notify_task(server: &'static Server) -> ! {
+    let dt = 400;
+    let mut ticker = Ticker::every(Duration::from_millis(dt));
+    loop {
+        ticker.next().await;
+        let temp = *ROOM_TEMP.lock().await;
+        let ble_temp = (temp * 100.) as i32;
+        let notice = *NOTICE.lock().await;
+        if notice {
+            let lock = CONN.lock().await;
+            let conn = match lock.as_ref() {
+                Some(conn) => conn,
+                None => {
+                    debug!("none to notify");
+                    continue;
+                }
+            };
+            server.thermo.current_temprature_notify(conn, &ble_temp);
+        }
+    }
+}
+pub async fn run_ble(s: Spawner) -> &'static Server {
     // Spawn the underlying softdevice task
     let device_name = "Embassy Microbit";
     let sd = enable_softdevice(device_name);
@@ -181,5 +211,6 @@ pub async fn init_ble(s: Spawner) -> &'static Server {
     // Starts the bluetooth advertisement and GATT server
     s.spawn(advertiser_task(s, sd, server, device_name))
         .unwrap();
+    s.spawn(notify_task(server)).unwrap();
     server
 }
